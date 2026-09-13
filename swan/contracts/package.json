@@ -9,6 +9,7 @@
     "clean": "hardhat clean",
     "deploy:local": "hardhat run scripts/deploy.cjs",
     "deploy:testnet": "hardhat run scripts/deploy.cjs --network hederaTestnet",
+    "deploy:kyc:testnet": "hardhat run scripts/deploy-kyc-registry.cjs --network hederaTestnet",
     "check:testnet": "hardhat run scripts/check-testnet.cjs --network hederaTestnet",
     "verify:testnet": "hardhat run scripts/verify-deployment.cjs --network hederaTestnet",
     "smoke:auction:testnet": "hardhat run scripts/smoke-auction.cjs --network hederaTestnet",

@@ -43,9 +43,9 @@ async function main() {
   const security = new ethers.Contract(securityAddress, ERC20_ABI, signer);
   const cash = new ethers.Contract(cashAddress, ERC20_ABI, signer);
   const quantity = 2n;
-  const unitPrice = 6_000_000n;
-  const reserve = 10_000_000n;
-  const bidAmount = 11_000_000n;
+  const unitPrice = 1_000_000n;
+  const reserve = 1_800_000n;
+  const bidAmount = 2_000_000n;
   const bondBalanceBefore = await security.balanceOf(signer.address);
   const cashBalanceBefore = await cash.balanceOf(signer.address);
 

@@ -101,12 +101,12 @@ async function main() {
   const securityKyc = new ethers.Contract(securityAddress, ATS_KYC_ABI, signer);
   const cash = new ethers.Contract(cashAddress, ERC20_ABI, signer);
   const quantity = 2n;
-  const principal = 5_000_000n;
-  const unitPrice = 6_000_000n;
-  const couponAmount = 100_000n;
+  const principal = 2_500_000n;
+  const unitPrice = 1_500_000n;
+  const couponAmount = 50_000n;
   const bondBalanceBefore = await security.balanceOf(signer.address);
-  if ((await cash.balanceOf(signer.address)) < 10_000_000n) {
-    throw new Error("The borrower needs at least 10 testnet USDC to provision the temporary lender");
+  if ((await cash.balanceOf(signer.address)) < 5_000_000n) {
+    throw new Error("The borrower needs at least 5 testnet USDC to provision the temporary lender");
   }
   const receipts = {};
 
@@ -144,7 +144,7 @@ async function main() {
   if ((await securityKyc.getKycStatusFor(lender.address)) !== 1n) {
     throw new Error("ATS KYC was not granted to the scheduled-test lender");
   }
-  receipts.lenderCash = await (await cash.transfer(lender.address, 10_000_000n)).wait();
+  receipts.lenderCash = await (await cash.transfer(lender.address, 3_000_000n)).wait();
   const borrowerCashBefore = await cash.balanceOf(signer.address);
   const lenderCashBefore = await cash.balanceOf(lender.address);
 
@@ -159,8 +159,8 @@ async function main() {
     ])
   ).wait();
   const repoId = eventId(repo, receipts.request, "RepoRequested", "repoId");
-  receipts.borrowerCashApproval = await (await cash.approve(repoAddress, 11_000_000n)).wait();
-  receipts.lenderCashApproval = await (await lenderCash.approve(repoAddress, 11_000_000n)).wait();
+  receipts.borrowerCashApproval = await (await cash.approve(repoAddress, 3_000_000n)).wait();
+  receipts.lenderCashApproval = await (await lenderCash.approve(repoAddress, 3_000_000n)).wait();
   receipts.offer = await (await lenderRepo.offerFunding(repoId, 410)).wait();
   await waitForTimestamp(fundingDeadline);
   receipts.open = await (await repo.openRepo(repoId)).wait();

@@ -16,7 +16,7 @@ async function main() {
   let oracleTransactionHash = null;
   if (!oracle) {
     const oracleFactory = await ethers.getContractFactory("SignedPriceOracle");
-    const signedOracle = await oracleFactory.deploy(priceSigner, Number(process.env.ORACLE_MAX_AGE_SECONDS || 120));
+    const signedOracle = await oracleFactory.deploy(priceSigner, Number(process.env.ORACLE_MAX_AGE_SECONDS || 180));
     await signedOracle.waitForDeployment();
     oracle = await signedOracle.getAddress();
     oracleTransactionHash = signedOracle.deploymentTransaction()?.hash ?? null;

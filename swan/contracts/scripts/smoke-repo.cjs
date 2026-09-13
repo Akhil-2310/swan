@@ -53,10 +53,10 @@ async function main() {
   const security = new ethers.Contract(securityAddress, ERC20_ABI, signer);
   const cash = new ethers.Contract(cashAddress, ERC20_ABI, signer);
   const quantity = 2n;
-  const principal = 5_000_000n;
-  const entryPrice = 6_000_000n;
-  const stormPrice = 2_000_000n;
-  const liquidationBid = 4_500_000n;
+  const principal = 2_500_000n;
+  const entryPrice = 1_500_000n;
+  const stormPrice = 500_000n;
+  const liquidationBid = 1_050_000n;
   const bondBalanceBefore = await security.balanceOf(signer.address);
   const cashBalanceBefore = await cash.balanceOf(signer.address);
   const receipts = {};
@@ -73,7 +73,7 @@ async function main() {
   ).wait();
   const repoId = eventId(repo, receipts.request, "RepoRequested", "repoId");
 
-  receipts.cashApproval = await (await cash.approve(repoAddress, 10_000_000n)).wait();
+  receipts.cashApproval = await (await cash.approve(repoAddress, 3_000_000n)).wait();
   receipts.offer = await (await repo.offerFunding(repoId, 410)).wait();
   await waitForTimestamp(fundingDeadline);
   receipts.open = await (await repo.openRepo(repoId)).wait();
