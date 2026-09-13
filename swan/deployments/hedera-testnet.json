@@ -1,29 +1,37 @@
 {
   "network": "hedera-testnet",
   "chainId": 296,
-  "deployedAt": "2026-09-13T09:36:22.007Z",
+  "deployedAt": "2026-09-13T13:28:17.115Z",
   "deployer": {
     "accountId": "0.0.10499008",
     "evmAddress": "0xea6732AD50C45dF760511e0F6D88D241fC60956D"
   },
   "contracts": {
     "signedPriceOracle": {
-      "contractId": "0.0.10519865",
-      "evmAddress": "0x723b729911bdf882cd1f51c7577629b8921cbc9f",
-      "transactionHash": "0xf9c40c3a4e587ee4fceb3d9f0c4e5f8dacfa767928a066d9edb29b0257b51b16",
-      "consensusTimestamp": "1789285433.121768302"
+      "contractId": "0.0.10523821",
+      "evmAddress": "0x412B2c3bbE07e9198Bc57BfDD697aeb54d481D9E",
+      "transactionHash": "0xdea0dcf07d8a60109f6f7ed359b4254b87aa79775d9980673f29f6cf85343753",
+      "consensusTimestamp": "1789306083.004996105"
     },
     "repoLifecycle": {
-      "contractId": "0.0.10521129",
-      "evmAddress": "0xbed5c7a220b815f7c5707d2b5ec08036d72d6991",
-      "transactionHash": "0xd8e47838346dd363fb603f15afa634293ceb6fc489c9d375a1042f620f6437cb",
-      "consensusTimestamp": "1789292176.370179105"
+      "contractId": "0.0.10523822",
+      "evmAddress": "0xeB192A3a7aDc5A5667e600F88963324547a003e7",
+      "transactionHash": "0x8b0fdd3f777892717f53aaf0e1a27fa8621200c333c2e2ad92b11df113a0dd4e",
+      "consensusTimestamp": "1789306088.120317753"
     },
     "complianceAuction": {
-      "contractId": "0.0.10521130",
-      "evmAddress": "0xd4f52a889002d719133bc5120387380350965d85",
-      "transactionHash": "0xc547f95042aa0f0ed7802b29876ce31f761390fe0755c1b7f7005ecde0f29594",
-      "consensusTimestamp": "1789292182.006975397"
+      "contractId": "0.0.10523825",
+      "evmAddress": "0xE1F425F6669AD43D35fD2b28Bace53d7FEA1B216",
+      "transactionHash": "0xbaf6a657b4fb5a0c35469389179db1d0232c5de9308879627b63cf281317ccf3",
+      "consensusTimestamp": "1789306097.115490105"
+    },
+    "kycAccessRegistry": {
+      "contractId": "0.0.10523103",
+      "evmAddress": "0xE11f893483E85c93900925c63036db827FEf5fdE",
+      "transactionHash": "0x24910fc61e520ba82077d8bdff72b022df91bbf8a350dc276ef9072ff793e2a1",
+      "consensusTimestamp": "1789302344.649788767",
+      "reviewer": "0xea6732AD50C45dF760511e0F6D88D241fC60956D",
+      "issuer": "0xea6732AD50C45dF760511e0F6D88D241fC60956D"
     },
     "atsBond": {
       "name": "Swan Treasury 2027",
@@ -34,6 +42,73 @@
       "transactionHash": "0x408479d77ab006b56e8b8bcb57d6ceb063b9dc88fd14b8d15880f11c7a256d75",
       "consensusTimestamp": "1789291165.652539650",
       "decimals": 0
-    }
-  }
+    },
+    "atsBonds": [
+      {
+        "id": "ust-28",
+        "name": "U.S. Treasury Note 4.25%",
+        "symbol": "USTB-28",
+        "isin": "XS0000USTB21",
+        "contractId": "0.0.10522810",
+        "evmAddress": "0xd19c20f6ada94055c944631be9cc7bc0aa761387",
+        "transactionHash": "0x96e17b59a82b720480e27ab735591471b49004b3fa63af0b6fa44ec9ca3faa50",
+        "consensusTimestamp": "1789301094.145323105",
+        "decimals": 0,
+        "unitPriceUsdc": "1.00",
+        "stormPriceUsdc": "0.68",
+        "haircutBps": 200,
+        "maxConcentrationBps": 7000,
+        "demoQuantity": "1"
+      },
+      {
+        "id": "green-30",
+        "name": "Sovereign Green Bond 3.80%",
+        "symbol": "GRNB-30",
+        "isin": "XS0000GRNB34",
+        "contractId": "0.0.10522837",
+        "evmAddress": "0x7753d71fbf47d1b410e5c7b207b7618e2dde8ae9",
+        "transactionHash": "0xf5170071a9deebc3ec751cb36d23e8f7057029027b3aec30c754dc827d6ad038",
+        "consensusTimestamp": "1789301252.320552896",
+        "decimals": 0,
+        "unitPriceUsdc": "0.98",
+        "stormPriceUsdc": "0.66",
+        "haircutBps": 800,
+        "maxConcentrationBps": 6000,
+        "demoQuantity": "1"
+      },
+      {
+        "id": "muni-31",
+        "name": "Metro Infrastructure 5.10%",
+        "symbol": "MUNI-31",
+        "isin": "XS0000MUNI34",
+        "contractId": "0.0.10522877",
+        "evmAddress": "0x51ee375fc22e5fd7debad472bd906dd419a027f3",
+        "transactionHash": "0xdec962c6284c1b96d55ae9d0358e2e399ace2939305f7ebe5321ac7f171bd078",
+        "consensusTimestamp": "1789301412.120354105",
+        "decimals": 0,
+        "unitPriceUsdc": "0.95",
+        "stormPriceUsdc": "0.64",
+        "haircutBps": 1500,
+        "maxConcentrationBps": 5500,
+        "demoQuantity": "1"
+      },
+      {
+        "id": "corp-29",
+        "name": "Northstar Senior Note 5.65%",
+        "symbol": "NSCR-29",
+        "isin": "XS0000NSCR21",
+        "contractId": "0.0.10522929",
+        "evmAddress": "0x5b04cbcc315291e821a73f94973a6d1ee8bb020b",
+        "transactionHash": "0xe7d2455bcdf1dc0095c874000da39bed153227c9a370e78a3dad1bd32b7bd2c3",
+        "consensusTimestamp": "1789301574.729839105",
+        "decimals": 0,
+        "unitPriceUsdc": "1.02",
+        "stormPriceUsdc": "0.62",
+        "haircutBps": 2000,
+        "maxConcentrationBps": 4500,
+        "demoQuantity": "1"
+      }
+    ]
+  },
+  "multiBondSeededAt": "2026-09-13T13:37:11.050Z"
 }

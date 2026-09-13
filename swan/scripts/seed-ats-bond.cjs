@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 const path = require("node:path");
+const fs = require("node:fs");
 const dotenv = require("dotenv");
 const { ethers } = require("ethers");
 
@@ -48,6 +49,61 @@ const RESOLVER = process.env.ATS_RESOLVER_ID || "0.0.9212226";
 const FACTORY = process.env.ATS_FACTORY_ID || "0.0.9213391";
 const BOND_CONFIG_ID =
   process.env.ATS_BOND_CONFIG_ID || "0x0000000000000000000000000000000000000000000000000000000000000002";
+const DEPLOYMENT_PATH = path.resolve(__dirname, "../deployments/hedera-testnet.json");
+const BONDS = [
+  {
+    id: "ust-28",
+    name: "U.S. Treasury Note 4.25%",
+    symbol: "USTB-28",
+    isin: "XS0000USTB21",
+    maturityYears: 2,
+    nominalValue: "1",
+    unitPriceUsdc: "1.00",
+    stormPriceUsdc: "0.68",
+    haircutBps: 200,
+    maxConcentrationBps: 7000,
+    demoQuantity: "1",
+  },
+  {
+    id: "green-30",
+    name: "Sovereign Green Bond 3.80%",
+    symbol: "GRNB-30",
+    isin: "XS0000GRNB34",
+    maturityYears: 4,
+    nominalValue: "1",
+    unitPriceUsdc: "0.98",
+    stormPriceUsdc: "0.66",
+    haircutBps: 800,
+    maxConcentrationBps: 6000,
+    demoQuantity: "1",
+  },
+  {
+    id: "muni-31",
+    name: "Metro Infrastructure 5.10%",
+    symbol: "MUNI-31",
+    isin: "XS0000MUNI34",
+    maturityYears: 5,
+    nominalValue: "1",
+    unitPriceUsdc: "0.95",
+    stormPriceUsdc: "0.64",
+    haircutBps: 1500,
+    maxConcentrationBps: 5500,
+    demoQuantity: "1",
+  },
+  {
+    id: "corp-29",
+    name: "Northstar Senior Note 5.65%",
+    symbol: "NSCR-29",
+    isin: "XS0000NSCR21",
+    maturityYears: 3,
+    nominalValue: "1",
+    unitPriceUsdc: "1.02",
+    stormPriceUsdc: "0.62",
+    haircutBps: 2000,
+    maxConcentrationBps: 4500,
+    demoQuantity: "1",
+  },
+];
 
 function required(name) {
   const value = process.env[name];
@@ -102,14 +158,14 @@ async function resolveConfigVersion() {
   ).payload;
 }
 
-async function createBond(wallet, accountId) {
+async function createBond(wallet, accountId, definition) {
   const now = Math.floor(Date.now() / 1_000);
   const configVersion = await resolveConfigVersion();
   const response = await Bond.create(
     new CreateBondRequest({
-      name: "Swan Treasury 2027",
-      symbol: "SWAN27",
-      isin: "XS0000SWAN18",
+      name: definition.name,
+      symbol: definition.symbol,
+      isin: definition.isin,
       decimals: 0,
       isWhiteList: false,
       erc20VotesActivated: false,
@@ -121,23 +177,61 @@ async function createBond(wallet, accountId) {
       diamondOwnerAccount: accountId,
       currency: "0x555344",
       numberOfUnits: "1000",
-      nominalValue: "6",
+      nominalValue: definition.nominalValue,
       nominalValueDecimals: 0,
       startingDate: String(now + 600),
-      maturityDate: String(now + 365 * 24 * 60 * 60),
+      maturityDate: String(now + definition.maturityYears * 365 * 24 * 60 * 60),
       regulationType: 1,
       regulationSubType: 0,
       isCountryControlListWhiteList: false,
       countries: "KP,IR",
-      info: "Swan ATS collateral and repo arena demo bond",
+      info: `${definition.symbol} Swan ATS collateral and repo arena demo bond`,
       configId: BOND_CONFIG_ID,
       configVersion,
     }),
   );
   const securityAddress = response.security.evmDiamondAddress?.toString();
   if (!securityAddress) throw new Error("ATS creation did not return an EVM security address");
-  console.log(JSON.stringify({ step: "bond-created", securityAddress, transactionId: response.transactionId }));
-  return securityAddress;
+  console.log(
+    JSON.stringify({
+      step: "bond-created",
+      symbol: definition.symbol,
+      securityAddress,
+      transactionId: response.transactionId,
+    }),
+  );
+  return { securityAddress, transactionId: response.transactionId };
+}
+
+function loadDeployment() {
+  return JSON.parse(fs.readFileSync(DEPLOYMENT_PATH, "utf8"));
+}
+
+function saveBondDeployment(definition, securityAddress, transactionId) {
+  const deployment = loadDeployment();
+  const existing = deployment.contracts.atsBonds || [];
+  const previous = existing.find((item) => item.id === definition.id);
+  const record = {
+    id: definition.id,
+    name: definition.name,
+    symbol: definition.symbol,
+    isin: definition.isin,
+    contractId: previous?.contractId || null,
+    evmAddress: securityAddress,
+    transactionHash: transactionId || previous?.transactionHash || previous?.transactionId || null,
+    consensusTimestamp: previous?.consensusTimestamp || null,
+    decimals: 0,
+    unitPriceUsdc: definition.unitPriceUsdc,
+    stormPriceUsdc: definition.stormPriceUsdc,
+    haircutBps: definition.haircutBps,
+    maxConcentrationBps: definition.maxConcentrationBps,
+    demoQuantity: definition.demoQuantity,
+  };
+  deployment.contracts.atsBonds = [...existing.filter((item) => item.id !== definition.id), record].sort(
+    (left, right) => BONDS.findIndex((item) => item.id === left.id) - BONDS.findIndex((item) => item.id === right.id),
+  );
+  deployment.multiBondSeededAt = new Date().toISOString();
+  fs.writeFileSync(DEPLOYMENT_PATH, `${JSON.stringify(deployment, null, 2)}\n`);
 }
 
 async function ensureRole(securityAddress, target, role) {
@@ -185,32 +279,54 @@ async function main() {
   const repo = required("REPO_CONTRACT_ADDRESS");
   const auction = required("AUCTION_CONTRACT_ADDRESS");
   const wallet = await setupSdk(privateKey, accountId);
-  const securityAddress = process.env.ATS_SECURITY_ADDRESS || (await createBond(wallet, accountId));
+  const kycRegistry = loadDeployment().contracts.kycAccessRegistry?.evmAddress;
+  const participants = (process.env.ATS_PARTICIPANT_ADDRESSES || "")
+    .split(",")
+    .map((address) => address.trim())
+    .filter(Boolean)
+    .map((address) => ethers.getAddress(address));
+  const deployedById = new Map((loadDeployment().contracts.atsBonds || []).map((item) => [item.id, item]));
+  const readyBonds = [];
 
-  for (const role of [SecurityRole._ISSUER_ROLE, SecurityRole._SSI_MANAGER_ROLE, SecurityRole._KYC_ROLE]) {
-    await ensureRole(securityAddress, wallet.address, role);
-  }
-  const issuerRequest = new IsIssuerRequest({ securityId: securityAddress, issuerId: wallet.address });
-  if (!(await SsiManagement.isIssuer(issuerRequest))) {
-    await SsiManagement.addIssuer(new AddIssuerRequest({ securityId: securityAddress, issuerId: wallet.address }));
-  }
-  for (const target of [wallet.address, repo, auction]) {
-    await ensureKyc(securityAddress, privateKey, target);
-  }
+  for (const definition of BONDS) {
+    const envName = `ATS_${definition.symbol.replace(/-/g, "_")}_ADDRESS`;
+    let securityAddress = process.env[envName] || deployedById.get(definition.id)?.evmAddress;
+    let transactionId;
+    if (!securityAddress) {
+      const created = await createBond(wallet, accountId, definition);
+      securityAddress = created.securityAddress;
+      transactionId = created.transactionId;
+      saveBondDeployment(definition, securityAddress, transactionId);
+    }
 
-  const currentBalance = await Security.getBalanceOf(
-    new GetAccountBalanceRequest({ securityId: securityAddress, targetId: wallet.address }),
-  );
-  if (Number(currentBalance.value) < 20) {
-    await Security.issue(new IssueRequest({ securityId: securityAddress, targetId: wallet.address, amount: "20" }));
+    for (const role of [SecurityRole._ISSUER_ROLE, SecurityRole._SSI_MANAGER_ROLE, SecurityRole._KYC_ROLE]) {
+      await ensureRole(securityAddress, wallet.address, role);
+    }
+    if (kycRegistry) await ensureRole(securityAddress, kycRegistry, SecurityRole._KYC_ROLE);
+    const issuerRequest = new IsIssuerRequest({ securityId: securityAddress, issuerId: wallet.address });
+    if (!(await SsiManagement.isIssuer(issuerRequest))) {
+      await SsiManagement.addIssuer(new AddIssuerRequest({ securityId: securityAddress, issuerId: wallet.address }));
+    }
+    for (const target of [wallet.address, repo, auction, ...participants]) {
+      await ensureKyc(securityAddress, privateKey, target);
+    }
+
+    const currentBalance = await Security.getBalanceOf(
+      new GetAccountBalanceRequest({ securityId: securityAddress, targetId: wallet.address }),
+    );
+    if (Number(currentBalance.value) < 20) {
+      await Security.issue(new IssueRequest({ securityId: securityAddress, targetId: wallet.address, amount: "20" }));
+    }
+    saveBondDeployment(definition, securityAddress, transactionId);
+    readyBonds.push({ ...definition, securityAddress, decimals: 0 });
+    console.log(JSON.stringify({ step: "bond-ready", symbol: definition.symbol, securityAddress }));
   }
 
   console.log(
     JSON.stringify(
       {
         ready: true,
-        securityAddress,
-        decimals: 0,
+        bonds: readyBonds,
         holder: wallet.address,
         repoEscrow: repo,
         auctionEscrow: auction,
