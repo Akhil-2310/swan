@@ -212,7 +212,7 @@
     "@changesets/cli": "^2.29.6",
     "@commitlint/cli": "^20.4.1",
     "@commitlint/config-conventional": "^20.4.1",
-    "@eslint/js": "^9.24.0",
+    "@eslint/js": "^10.0.1",
     "@typescript-eslint/eslint-plugin": "8.26.0",
     "@typescript-eslint/parser": "8.26.0",
     "@typescript-eslint/scope-manager": "8.26.0",
