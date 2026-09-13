@@ -1,0 +1,39 @@
+{
+  "network": "hedera-testnet",
+  "chainId": 296,
+  "deployedAt": "2026-09-13T09:36:22.007Z",
+  "deployer": {
+    "accountId": "0.0.10499008",
+    "evmAddress": "0xea6732AD50C45dF760511e0F6D88D241fC60956D"
+  },
+  "contracts": {
+    "signedPriceOracle": {
+      "contractId": "0.0.10519865",
+      "evmAddress": "0x723b729911bdf882cd1f51c7577629b8921cbc9f",
+      "transactionHash": "0xf9c40c3a4e587ee4fceb3d9f0c4e5f8dacfa767928a066d9edb29b0257b51b16",
+      "consensusTimestamp": "1789285433.121768302"
+    },
+    "repoLifecycle": {
+      "contractId": "0.0.10521129",
+      "evmAddress": "0xbed5c7a220b815f7c5707d2b5ec08036d72d6991",
+      "transactionHash": "0xd8e47838346dd363fb603f15afa634293ceb6fc489c9d375a1042f620f6437cb",
+      "consensusTimestamp": "1789292176.370179105"
+    },
+    "complianceAuction": {
+      "contractId": "0.0.10521130",
+      "evmAddress": "0xd4f52a889002d719133bc5120387380350965d85",
+      "transactionHash": "0xc547f95042aa0f0ed7802b29876ce31f761390fe0755c1b7f7005ecde0f29594",
+      "consensusTimestamp": "1789292182.006975397"
+    },
+    "atsBond": {
+      "name": "Swan Treasury 2027",
+      "symbol": "SWAN27",
+      "isin": "XS0000SWAN18",
+      "contractId": "0.0.10520941",
+      "evmAddress": "0x269df6f7fab55f09b4b137600210cf5bb2e59beb",
+      "transactionHash": "0x408479d77ab006b56e8b8bcb57d6ceb063b9dc88fd14b8d15880f11c7a256d75",
+      "consensusTimestamp": "1789291165.652539650",
+      "decimals": 0
+    }
+  }
+}

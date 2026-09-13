@@ -1,0 +1,44 @@
+{
+  "network": "hedera-testnet",
+  "chainId": 296,
+  "deployment": "hedera-testnet.json",
+  "atsBond": {
+    "contractId": "0.0.10520941",
+    "evmAddress": "0x269df6f7fab55f09b4b137600210cf5bb2e59beb",
+    "symbol": "SWAN27"
+  },
+  "scheduledClose": {
+    "passed": true,
+    "repoId": "3",
+    "borrower": {
+      "accountId": "0.0.10499008",
+      "evmAddress": "0xea6732AD50C45dF760511e0F6D88D241fC60956D",
+      "scheduledCaller": "0x0000000000000000000000000000000000a033c0"
+    },
+    "lender": {
+      "accountId": "0.0.10521241",
+      "evmAddress": "0x6B121dA6a8F589802a125BC38D75f831b4f3e21c",
+      "scheduledCaller": "0x0000000000000000000000000000000000a08a99"
+    },
+    "couponSchedule": {
+      "scheduleId": "0.0.10521260",
+      "scheduleUrl": "https://hashscan.io/testnet/schedule/0.0.10521260",
+      "executionHash": "0xce469eee71ffee6d22367e135d39de5aafdf11d69d1228e29b25fcfe54f99377",
+      "executionUrl": "https://hashscan.io/testnet/transaction/0xce469eee71ffee6d22367e135d39de5aafdf11d69d1228e29b25fcfe54f99377"
+    },
+    "closeSchedule": {
+      "scheduleId": "0.0.10521264",
+      "scheduleUrl": "https://hashscan.io/testnet/schedule/0.0.10521264",
+      "executionHash": "0xd1a4b5d6b20ed52a395c4536e678f4b29c45a242877cca2ab17c25a664ec8ff3",
+      "executionUrl": "https://hashscan.io/testnet/transaction/0xd1a4b5d6b20ed52a395c4536e678f4b29c45a242877cca2ab17c25a664ec8ff3"
+    },
+    "assertions": [
+      "distinct borrower and lender",
+      "ATS KYC granted to lender",
+      "coupon equivalent paid by native schedule",
+      "repo state closed by native schedule",
+      "ATS collateral returned",
+      "USDC reconciled across counterparties"
+    ]
+  }
+}
