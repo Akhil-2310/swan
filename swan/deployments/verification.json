@@ -1,0 +1,63 @@
+{
+  "network": "hedera-testnet",
+  "chainId": 296,
+  "verifiedAt": "2026-09-13T15:54:15Z",
+  "compiler": {
+    "version": "0.8.28+commit.7893614a",
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    },
+    "viaIR": true,
+    "evmVersion": "paris"
+  },
+  "deploymentChecks": {
+    "passed": true,
+    "command": "npm run verify:testnet --workspace=@swan/contracts",
+    "scope": "Swan bytecode, immutable wiring, KYC registry roles, four ATS bond interfaces, KYC state, balances, and transfer permissions"
+  },
+  "sourceVerification": {
+    "passed": true,
+    "provider": "Sourcify",
+    "command": "npm run verify:sources:testnet --workspace=@swan/contracts",
+    "contracts": [
+      {
+        "name": "SignedPriceOracle",
+        "contractId": "0.0.10523821",
+        "evmAddress": "0x412B2c3bbE07e9198Bc57BfDD697aeb54d481D9E",
+        "creationMatch": "exact_match",
+        "runtimeMatch": "exact_match",
+        "verifiedAt": "2026-09-13T15:53:54Z"
+      },
+      {
+        "name": "RepoLifecycle",
+        "contractId": "0.0.10523822",
+        "evmAddress": "0xeB192A3a7aDc5A5667e600F88963324547a003e7",
+        "creationMatch": "exact_match",
+        "runtimeMatch": "exact_match",
+        "verifiedAt": "2026-09-13T15:53:59Z"
+      },
+      {
+        "name": "ComplianceAuction",
+        "contractId": "0.0.10523825",
+        "evmAddress": "0xE1F425F6669AD43D35fD2b28Bace53d7FEA1B216",
+        "creationMatch": "exact_match",
+        "runtimeMatch": "exact_match",
+        "verifiedAt": "2026-09-13T15:54:07Z"
+      },
+      {
+        "name": "KycAccessRegistry",
+        "contractId": "0.0.10523103",
+        "evmAddress": "0xE11f893483E85c93900925c63036db827FEf5fdE",
+        "creationMatch": "match",
+        "runtimeMatch": "match",
+        "verifiedAt": "2026-09-13T15:54:15Z"
+      }
+    ]
+  },
+  "atsCollateral": {
+    "deploymentChecksPassed": true,
+    "sourcifySubmittedBySwan": false,
+    "note": "The four collateral securities are ATS-generated diamond contracts. Swan validates their deployed code and required ATS behavior but does not claim a standalone Sourcify match for the upstream ATS implementation."
+  }
+}

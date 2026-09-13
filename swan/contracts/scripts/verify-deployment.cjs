@@ -75,7 +75,9 @@ async function main() {
     const prefix = bond.symbol.replace(/-/g, "_");
     checks[`${prefix}_code`] = (await ethers.provider.getCode(bond.evmAddress)).length > 2;
     checks[`${prefix}_decimals`] = Number(await security.decimals()) === bond.decimals;
-    checks[`${prefix}_balance`] = (await security.balanceOf(deployer.address)) >= 20n;
+    // Demo runs legitimately move seeded units into repo or auction escrow, so
+    // verification only requires one immediately transferable holder unit.
+    checks[`${prefix}_balance`] = (await security.balanceOf(deployer.address)) >= 1n;
     checks[`${prefix}_active`] = !(await security.paused());
     checks[`${prefix}_internalKyc`] = internalKyc;
     checks[`${prefix}_holderKyc`] = !internalKyc || Number(await security.getKycStatusFor(deployer.address)) === 1;

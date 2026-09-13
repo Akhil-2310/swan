@@ -12,6 +12,7 @@
     "deploy:kyc:testnet": "hardhat run scripts/deploy-kyc-registry.cjs --network hederaTestnet",
     "check:testnet": "hardhat run scripts/check-testnet.cjs --network hederaTestnet",
     "verify:testnet": "hardhat run scripts/verify-deployment.cjs --network hederaTestnet",
+    "verify:sources:testnet": "node scripts/verify-sources.cjs",
     "smoke:auction:testnet": "hardhat run scripts/smoke-auction.cjs --network hederaTestnet",
     "smoke:repo:testnet": "hardhat run scripts/smoke-repo.cjs --network hederaTestnet",
     "smoke:scheduled-close:testnet": "hardhat run scripts/smoke-scheduled-close.cjs --network hederaTestnet",
