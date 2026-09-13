@@ -6,8 +6,14 @@ The experience is presented as a virtual-pet strategy game: the collateral baske
 
 > **Network status:** deployed and verified on Hedera testnet, chain ID `296`. The four Swan-owned Solidity contracts are publicly source-verified through Sourcify. Live configuration, KYC, ATS transfer, and deployment checks also pass. This is unaudited testnet software, not a production financial product.
 
+## Demo and pitch
+
+- [Demo video](https://youtu.be/mnVCZfR2NZA)
+- [Pitch deck](https://docs.google.com/presentation/d/1gK_I4Fr3w_tZeGenMaYv97ka3OIssISC/edit?usp=sharing)
+
 ## Contents
 
+- [Demo and pitch](#demo-and-pitch)
 - [The problem](#the-problem)
 - [What Swan delivers](#what-swan-delivers)
 - [How the lifecycle works](#how-the-lifecycle-works)
