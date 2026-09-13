@@ -286,11 +286,16 @@ VITE_USDC_ADDRESS=0x0000000000000000000000000000000000068cda
 VITE_MIRROR_NODE_URL=https://testnet.mirrornode.hedera.com/api/v1
 VITE_HEDERA_RPC_URL=https://testnet.hashio.io/api
 VITE_WALLETCONNECT_PROJECT_ID=
+VITE_AUTO_DEMO_KYC=false
 ```
 
 The committed deployment manifest supplies the four ATS bond addresses, so the `VITE_ATS_*` variables are optional overrides. `VITE_SCHEDULED_CALLER_ADDRESS` is optional and should be the connected account's long-zero address when demonstrating native scheduled calls.
 
 All `VITE_*` values are public and embedded in the browser bundle. Never put a private key in a `VITE_*` variable.
+
+### Automated testnet demo access
+
+For an unattended company or judge demo, Vercel serves [`../api/kyc-approve.mjs`](../api/kyc-approve.mjs). A tester first submits the normal on-chain request, then signs a five-minute ownership message. The server verifies the signature, chain, registry, pending status, role bits, and configured reviewer before granting seven-day testnet KYC across the four ATS bonds. Manual approval remains available in Book.
 
 ### Contract/operator variables
 
@@ -306,9 +311,7 @@ Two wallets are recommended because they show a real borrower/lender relationshi
 
 1. Connect Wallet B and switch RainbowKit to Hedera testnet.
 2. Open **Book → ATS access passport** and request **both roles**.
-3. Switch to Wallet A.
-4. In **Book → Compliance queue**, inspect Wallet B and approve it.
-5. Switch back to Wallet B and confirm the passport reads **approved**.
+3. If automated demo access is enabled, sign the ownership message and wait for the passport to read **approved**. If it is disabled, switch to Wallet A, approve Wallet B in **Compliance queue**, then switch back.
 
 The queue is intentionally a mock compliance boundary: it proves reviewer-controlled, auditable access but does not perform real document or AML verification.
 

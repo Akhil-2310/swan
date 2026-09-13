@@ -40,6 +40,7 @@ const LIVE_ADDRESSES: LiveAddresses | null = Object.values(configuredLiveAddress
   : null;
 const LIVE_REPO_STORAGE_KEY = `swan.live.repo-id.${configuredLiveAddresses.repoLifecycle.toLowerCase()}`;
 const LIVE_AUCTION_STORAGE_KEY = `swan.live.auction-id.${configuredLiveAddresses.complianceAuction.toLowerCase()}`;
+const AUTO_DEMO_KYC = import.meta.env.VITE_AUTO_DEMO_KYC === "true";
 const LIVE_REPO_ALLOWANCE = parseUsdc("3");
 const LIVE_AUCTION_ALLOWANCE = parseUsdc("3");
 const LENDERS: FundingOffer[] = [
@@ -438,8 +439,35 @@ export default function App() {
   }
 
   async function requestLiveKyc(roles: 1 | 2 | 3) {
-    const result = await executeLive("KYC access requested", () => requireLiveClient().requestKyc(roles));
-    if (result) await refreshKyc();
+    const client = requireLiveClient();
+    const result = await executeLive("KYC access requested", () => client.requestKyc(roles));
+    if (!result) return;
+    await refreshKyc(client);
+    if (AUTO_DEMO_KYC) await autoApproveLiveKyc(client);
+  }
+
+  async function autoApproveLiveKyc(client = requireLiveClient()) {
+    try {
+      setLiveBusy("automated demo KYC");
+      const issuedAt = Math.floor(Date.now() / 1_000);
+      const signature = await client.signDemoAccess(issuedAt);
+      const response = await fetch("/api/kyc-approve", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ applicant: client.account, issuedAt, signature }),
+      });
+      const result = (await response.json()) as { error?: string; hashscanUrl?: string };
+      if (!response.ok) throw new Error(result.error || `AUTOMATED_DEMO_KYC_${response.status}`);
+      await refreshKyc(client);
+      setLiveReadout("Automated testnet demo approval completed across all four ATS bonds.");
+      setNotice({ tone: "good", text: "Demo KYC approved. Repo and auction actions are unlocked." });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AUTOMATED_DEMO_KYC_FAILED";
+      setLiveReadout(`${message}. The request remains pending for manual reviewer approval.`);
+      setNotice({ tone: "bad", text: "Automatic approval was unavailable; retry or ask the reviewer." });
+    } finally {
+      setLiveBusy(undefined);
+    }
   }
 
   async function reviewLiveKyc(applicant: string, approve: boolean) {
@@ -1632,7 +1660,22 @@ export default function App() {
                         </div>
                       )}
                       {kycRequest?.status === "PENDING" && !liveKycReady && (
-                        <span className="kyc-waiting">Request submitted. Ask the compliance wallet to approve it.</span>
+                        <div className="btn-row wrap">
+                          <span className="kyc-waiting">
+                            {AUTO_DEMO_KYC
+                              ? "Request submitted. Complete the wallet signature for automated demo approval."
+                              : "Request submitted. Ask the compliance wallet to approve it."}
+                          </span>
+                          {AUTO_DEMO_KYC && (
+                            <button
+                              className="toy solid"
+                              disabled={!liveAccount || Boolean(liveBusy)}
+                              onClick={() => void autoApproveLiveKyc()}
+                            >
+                              retry demo approval
+                            </button>
+                          )}
+                        </div>
                       )}
                       {KYC_ACCESS_REGISTRY_ID && (
                         <a

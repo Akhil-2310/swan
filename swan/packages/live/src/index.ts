@@ -221,6 +221,11 @@ export class LiveSwanClient {
     return evidence(await (await this.kyc.requestAccess(roles)).wait());
   }
 
+  async signDemoAccess(issuedAt: number): Promise<string> {
+    const signer = await this.provider.getSigner();
+    return signer.signMessage(demoAccessMessage(this.account, this.addresses.kycAccessRegistry, issuedAt));
+  }
+
   async approveKyc(applicant: string): Promise<TransactionEvidence> {
     const validTo = BigInt(Math.floor(Date.now() / 1_000) + 365 * 24 * 60 * 60);
     const vcId = `swan:${getAddress(applicant).toLowerCase()}:${Date.now()}`;
@@ -484,6 +489,16 @@ export function parseTokenUnits(value: string, decimals: number): bigint {
 
 export function hashScheduleId(scheduleId: string): string {
   return id(scheduleId.trim());
+}
+
+export function demoAccessMessage(applicant: string, registry: string, issuedAt: number): string {
+  return [
+    "Swan automated testnet demo access",
+    `Chain ID: ${HEDERA_TESTNET_CHAIN_ID}`,
+    `Registry: ${getAddress(registry).toLowerCase()}`,
+    `Applicant: ${getAddress(applicant).toLowerCase()}`,
+    `Issued at: ${issuedAt}`,
+  ].join("\n");
 }
 
 export function formatUsdc(value: bigint): string {
