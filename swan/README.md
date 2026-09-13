@@ -6,8 +6,6 @@ The experience is presented as a virtual-pet strategy game: the collateral baske
 
 > **Network status:** deployed and verified on Hedera testnet, chain ID `296`. The four Swan-owned Solidity contracts are publicly source-verified through Sourcify. Live configuration, KYC, ATS transfer, and deployment checks also pass. This is unaudited testnet software, not a production financial product.
 
-Swan does **not** use Inco.
-
 ## Contents
 
 - [The problem](#the-problem)
