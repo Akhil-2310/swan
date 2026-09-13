@@ -45,7 +45,7 @@
     "@openzeppelin/hardhat-upgrades": "1.28.0",
     "@terminal3/ecdsa_vc": "0.1.21",
     "@typechain/ethers-v6": "0.5.1",
-    "@typechain/hardhat": "6.1.6",
+    "@typechain/hardhat": "9.1.0",
     "@types/mocha": "10.0.10",
     "chai": "4.5.0",
     "chai-as-promised": "7.1.2",
