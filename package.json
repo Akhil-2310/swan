@@ -231,7 +231,7 @@
     "lint-staged": "^15.2.11",
     "prettier": "^3.5.3",
     "prettier-plugin-solidity": "^1.4.2",
-    "react-router-dom": "6.30.3",
+    "react-router-dom": "7.18.3",
     "rimraf": "6.0.1",
     "solhint": "6.0.3",
     "solhint-plugin-prettier": "^0.1.0",
