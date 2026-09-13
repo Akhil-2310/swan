@@ -661,12 +661,25 @@ export default function App() {
   }
 
   async function createLiveLiquidation() {
-    await executeLive("liquidation auction", async () => {
-      const result = await requireLiveClient().createLiquidationAuctions(
-        liveEntityId(liveForm.repoId, "Repo ID"),
-        BigInt(Math.floor(Date.now() / 1_000) + 90),
-        1_500,
+    const client = requireLiveClient();
+    const repoId = liveEntityId(liveForm.repoId, "Repo ID");
+    let existingIds: bigint[] = [];
+    try {
+      existingIds = await client.liquidationAuctionIds(repoId);
+    } catch {
+      // Recovery is best-effort; a provider without eth_getLogs support can
+      // still route a new default and use the on-chain counter fallback.
+    }
+    if (existingIds.length > 0) {
+      setLiveField("auctionId", existingIds[0].toString());
+      setLiveReadout(
+        `Recovered ${existingIds.length} existing liquidation auction${existingIds.length === 1 ? "" : "s"}. Auction ${existingIds[0]} is ready for bidding.`,
       );
+      setNotice({ tone: "good", text: `Recovered Auction ID ${existingIds[0]}; do not route the default again.` });
+      return;
+    }
+    await executeLive("liquidation auction", async () => {
+      const result = await client.createLiquidationAuctions(repoId, BigInt(Math.floor(Date.now() / 1_000) + 90), 1_500);
       setLiveField("auctionId", result.entityIds[0].toString());
       return result;
     });
@@ -1551,6 +1564,18 @@ export default function App() {
                         <button
                           disabled={!liveAccount || Boolean(liveBusy)}
                           onClick={() =>
+                            void executeLive("oracle exception approved", () =>
+                              requireLiveClient().approveOracleException(
+                                liveEntityId(liveForm.auctionId, "Auction ID"),
+                              ),
+                            )
+                          }
+                        >
+                          approve price exception
+                        </button>
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() =>
                             void executeLive("auction settled", () =>
                               requireLiveClient().settleAuction(liveEntityId(liveForm.auctionId, "Auction ID")),
                             )
@@ -1958,6 +1983,9 @@ function readableLiveError(error: unknown, fallback: string) {
   }
   if (message.includes("0x8baa579f")) {
     return "ORACLE_SIGNER_REQUIRED: switch to the configured price-signer wallet.";
+  }
+  if (message.includes("0x90b8e342")) {
+    return "ORACLE_REVIEW_REQUIRED: the winning bid is outside the 15% oracle band. Switch to the compliance reviewer, approve the price exception, then settle DvP.";
   }
   return message;
 }

@@ -80,10 +80,11 @@ const REPO_ABI = [
   "function closeRepo(uint256 repoId)",
   "function declareDefault(uint256 repoId)",
   "function createLiquidationAuctions(uint256 repoId,address auction,uint256 biddingDeadline,uint16 sanityToleranceBps) returns (uint256[])",
+  "function collateralCount(uint256 repoId) view returns (uint256)",
   "function repos(uint256 repoId) view returns (uint8 state,address borrower,address lender,address cash,uint256 principal,uint256 outstanding,uint256 fundingDeadline,uint256 maturity,uint256 marginDeadline,uint256 openedAt,uint16 maintenanceBps,uint16 winningRateBps,address bestLender,uint16 bestRateBps,bool couponEquivalentScheduled,bytes32 couponScheduleHash,bool couponEquivalentPaid,address scheduledBorrowerCaller,address scheduledLenderCaller)",
   "function collateralCapacity(uint256 repoId) view returns (uint256)",
   "event RepoRequested(uint256 indexed repoId,address indexed borrower,uint256 principal,uint256 capacity)",
-  "event LiquidationAuctionCreated(uint256 indexed repoId,uint256 indexed auctionId,uint256 indexed collateralIndex,uint256 lenderClaim)",
+  "event LiquidationAuctionCreated(uint256 indexed repoId,uint256 indexed auctionId,uint256 collateralIndex,uint256 lenderClaim)",
 ];
 
 const AUCTION_ABI = [
@@ -94,6 +95,7 @@ const AUCTION_ABI = [
   "function withdrawRefund(uint256 auctionId)",
   "function cancel(uint256 auctionId)",
   "function approveOracleException(uint256 auctionId)",
+  "function nextAuctionId() view returns (uint256)",
   "function auctions(uint256 auctionId) view returns (uint8 kind,uint8 state,address security,address cash,address seller,address beneficiary,address surplusRecipient,uint256 lenderClaim,uint256 quantity,uint256 reservePrice,uint256 biddingDeadline,uint256 oraclePrice,uint16 sanityToleranceBps,address highestBidder,uint256 highestBid,bool oracleExceptionApproved)",
   "event AuctionListed(uint256 indexed auctionId,uint8 indexed kind,address indexed seller,address beneficiary,address security,address cash,uint256 quantity,uint256 reservePrice,uint256 biddingDeadline,uint256 oraclePrice)",
 ];
@@ -364,6 +366,8 @@ export class LiveSwanClient {
     biddingDeadline: bigint,
     sanityToleranceBps: number,
   ): Promise<CreatedManyTransactionEvidence> {
+    const auctionIdBefore = BigInt(await this.auction.nextAuctionId());
+    const collateralCount = BigInt(await this.repo.collateralCount(repoId));
     const receipt = await (
       await this.repo.createLiquidationAuctions(
         repoId,
@@ -372,10 +376,41 @@ export class LiveSwanClient {
         sanityToleranceBps,
       )
     ).wait();
+    let entityIds = eventIds(this.repo, receipt, "LiquidationAuctionCreated", "auctionId", false);
+    if (entityIds.length === 0) {
+      // Hashio occasionally returns a successful top-level receipt without logs
+      // produced around nested contract calls. The auction counter still gives a
+      // deterministic, on-chain recovery path for this atomic transaction.
+      const auctionIdAfter = BigInt(await this.auction.nextAuctionId());
+      if (collateralCount === 0n || auctionIdAfter < auctionIdBefore + collateralCount) {
+        throw new Error("LIQUIDATIONAUCTIONCREATED_EVENT_MISSING");
+      }
+      const firstCreatedId = auctionIdAfter - collateralCount;
+      entityIds = Array.from({ length: Number(collateralCount) }, (_, index) => firstCreatedId + BigInt(index));
+    }
     return {
       ...evidence(receipt),
-      entityIds: eventIds(this.repo, receipt, "LiquidationAuctionCreated", "auctionId"),
+      entityIds,
     };
+  }
+
+  async liquidationAuctionIds(repoId: bigint, attempts = 1): Promise<bigint[]> {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const latestBlock = await this.provider.getBlockNumber();
+      const fromBlock = Math.max(0, latestBlock - 2_000);
+      const filter = this.repo.filters.LiquidationAuctionCreated(repoId);
+      const logs = await this.repo.queryFilter(filter, fromBlock, latestBlock);
+      const ids = logs.flatMap((log) => {
+        if (!("args" in log) || !log.args) return [];
+        return [BigInt(log.args.auctionId)];
+      });
+      if (ids.length > 0) {
+        const snapshots = await Promise.all(ids.map((auctionId) => this.auction.auctions(auctionId)));
+        return ids.filter((_, index) => Number(snapshots[index].state) === 1 || Number(snapshots[index].state) === 2);
+      }
+      if (attempt + 1 < attempts) await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
+    return [];
   }
 
   async createVoluntaryAuction(input: {
@@ -530,6 +565,7 @@ function eventIds(
   receipt: TransactionReceipt | null,
   eventName: string,
   argumentName: string,
+  required = true,
 ): bigint[] {
   if (!receipt) throw new Error("TRANSACTION_DROPPED");
   const ids: bigint[] = [];
@@ -541,6 +577,6 @@ function eventIds(
       // Ignore logs emitted by other contracts in the same transaction.
     }
   }
-  if (ids.length === 0) throw new Error(`${eventName.toUpperCase()}_EVENT_MISSING`);
+  if (required && ids.length === 0) throw new Error(`${eventName.toUpperCase()}_EVENT_MISSING`);
   return ids;
 }

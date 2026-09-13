@@ -357,8 +357,9 @@ USDC allowances are consumed by `transferFrom`. If repayment or close reports a 
 4. Switch to Wallet B—the winning lender—and click **route default** within 180 seconds of the price refresh.
 5. Save the generated Auction ID. A multi-line basket creates one auction per collateral line; the UI stores the first.
 6. For the lowest-faucet two-wallet path, switch to Wallet A, use part of the `2.5 USDC` principal it received, approve bid cash, enter the default `1.05 USDC` bid, and click **place bid**. To have Wallet B act as both lender and bidder instead, fund it with at least `3.60 USDC` before starting (`2.5` principal + `0.05` coupon + `1.05` bid).
-7. After 90 seconds, click **close after 90s**, then **settle DvP**.
-8. Inspect HashScan/Mirror Node evidence: the bidder receives the ATS bond, lender recovery is paid first, and defined surplus returns to the borrower.
+7. After 90 seconds, click **close after 90s**. If the winning bid is outside the auction's ±15% oracle band, Wallet A must click **approve price exception**; this is the reviewer-controlled market-sanity gate.
+8. Click **settle DvP**.
+9. Inspect HashScan/Mirror Node evidence: the bidder receives the ATS bond, lender recovery is paid first, and defined surplus returns to the borrower.
 
 For a voluntary sale, Wallet A instead signs normal market prices, approves one sale lot, and clicks **voluntary list**. The bidder/close/settle steps are the same.
 
