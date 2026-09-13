@@ -1,0 +1,9 @@
+{
+  "name": "swan",
+  "private": true,
+  "scripts": {
+    "build": "npm run swan:build --prefix ..",
+    "test": "npm run swan:test --prefix ..",
+    "dev": "npm run swan:dev --prefix .."
+  }
+}
