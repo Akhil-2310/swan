@@ -181,7 +181,7 @@
     "@thomaschaplin/isin-generator": "^1.0.3",
     "@tokenysolutions/t-rex": "^4.1.6",
     "@typechain/ethers-v6": "^0.5.1",
-    "@typechain/hardhat": "^6.1.2",
+    "@typechain/hardhat": "^9.1.0",
     "@types/jest": "^29.5.14",
     "@types/sinon": "^21.0.0",
     "chai": "^4.4.0",
