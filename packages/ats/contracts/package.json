@@ -191,7 +191,7 @@
     "hardhat-abi-exporter": "^2.11.0",
     "hardhat-contract-sizer": "^2.10.0",
     "hardhat-dependency-compiler": "^1.2.1",
-    "hardhat-gas-reporter": "^1.0.8",
+    "hardhat-gas-reporter": "^2.3.0",
     "sinon": "^21.0.1",
     "solidity-coverage": "^0.8.14",
     "tsc-alias": "^1.8.16",

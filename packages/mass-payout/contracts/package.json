@@ -54,7 +54,7 @@
     "hardhat": "2.28.6",
     "hardhat-abi-exporter": "2.11.0",
     "hardhat-contract-sizer": "2.10.0",
-    "hardhat-gas-reporter": "1.0.10",
+    "hardhat-gas-reporter": "2.3.0",
     "@primitivefi/hardhat-dodoc": "0.2.3",
     "prettier-plugin-solidity": "1.4.3",
     "solhint": "3.6.2",
