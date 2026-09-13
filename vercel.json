@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build --workspace=@swan/ats-client && npm run build --workspace=@swan/repo && npm run build --workspace=@swan/live && npm run build --workspace=@swan/auction && npm run build --workspace=@swan/web",
+  "outputDirectory": "swan/apps/web/dist"
+}
