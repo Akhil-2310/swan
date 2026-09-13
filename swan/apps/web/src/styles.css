@@ -582,6 +582,14 @@ a {
   gap: 8px;
 }
 
+.bond-testnet {
+  display: block;
+  margin-top: 3px;
+  color: var(--lcd-ink);
+  font-family: "Silkscreen", monospace;
+  font-size: 8px;
+}
+
 .bond {
   display: flex;
   justify-content: space-between;
@@ -768,6 +776,102 @@ a {
   margin-top: 12px;
 }
 
+.kyc-box {
+  display: grid;
+  gap: 9px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 3px solid var(--lcd-ink);
+  border-radius: 16px;
+  background: rgb(183 201 180 / 45%);
+}
+
+.kyc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kyc-head small,
+.kyc-head b {
+  display: block;
+}
+
+.kyc-head small,
+.kyc-box > a,
+.kyc-waiting,
+.kyc-review > b,
+.kyc-applicant small {
+  font-family: "Silkscreen", monospace;
+  font-size: 9px;
+}
+
+.kyc-head i {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--lcd-ink);
+  border-radius: 50%;
+  font-style: normal;
+}
+
+.kyc-head i.ok {
+  background: #8fbf9a;
+}
+
+.kyc-head i.pending {
+  background: var(--beak);
+}
+
+.kyc-head i.fail {
+  background: #d9a0a0;
+}
+
+.kyc-box p,
+.kyc-box .btn-row {
+  margin: 0;
+}
+
+.kyc-review {
+  display: grid;
+  gap: 6px;
+  padding-top: 9px;
+  border-top: 2px dashed var(--lcd-ink);
+}
+
+.kyc-applicant {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px;
+  border: 2px solid var(--lcd-ink);
+  border-radius: 10px;
+  background: var(--ivory);
+}
+
+.kyc-applicant > span b,
+.kyc-applicant > span small {
+  display: block;
+}
+
+.kyc-applicant > div {
+  display: flex;
+  gap: 4px;
+}
+
+.kyc-applicant button {
+  border: 2px solid var(--lcd-ink);
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: #b7c9b4;
+  font-family: "Silkscreen", monospace;
+  font-size: 8px;
+  cursor: pointer;
+}
+
 .cash-box a {
   margin-right: 12px;
   font-family: "Silkscreen", monospace;
@@ -854,6 +958,39 @@ a {
   color: var(--lcd-ink);
   font: inherit;
   font-size: 11px;
+}
+
+.live-basket {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 7px;
+}
+
+.live-bond {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 2px solid var(--lcd-ink);
+  border-radius: 12px;
+  background: rgb(183 201 180 / 35%);
+}
+
+.live-bond-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-bond-head b {
+  font-family: "Silkscreen", monospace;
+  font-size: 11px;
+}
+
+.live-bond-values {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
 }
 
 .live-actions {

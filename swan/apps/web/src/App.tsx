@@ -4,15 +4,18 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useChainId } from "wagmi";
 import Landing from "./Landing";
+import { DEFAULT_LIVE_BONDS, DEPLOYED_LIVE_ADDRESSES, KYC_ACCESS_REGISTRY_ID, type LiveBondForm } from "./live-bonds";
 import { createDemoEngine, type ComplianceAuction, type ComplianceAuctionEngine } from "@swan/auction";
 import {
   HEDERA_TESTNET_USDC_TOKEN_ID,
+  HEDERA_TESTNET_USDC_ADDRESS,
   LiveSwanClient,
   formatUsdc,
   hashScheduleId,
   parseTokenUnits,
   parseUsdc,
   type LiveAddresses,
+  type KycRequest,
   type TransactionEvidence,
   type UsdcSnapshot,
 } from "@swan/live";
@@ -25,20 +28,20 @@ import {
   type RepoEngine,
 } from "@swan/repo";
 
-const LIVE_ADDRESSES: LiveAddresses | null =
-  import.meta.env.VITE_REPO_LIFECYCLE_ADDRESS &&
-  import.meta.env.VITE_COMPLIANCE_AUCTION_ADDRESS &&
-  import.meta.env.VITE_SIGNED_PRICE_ORACLE_ADDRESS &&
-  import.meta.env.VITE_USDC_ADDRESS
-    ? {
-        repoLifecycle: import.meta.env.VITE_REPO_LIFECYCLE_ADDRESS,
-        complianceAuction: import.meta.env.VITE_COMPLIANCE_AUCTION_ADDRESS,
-        signedPriceOracle: import.meta.env.VITE_SIGNED_PRICE_ORACLE_ADDRESS,
-        usdc: import.meta.env.VITE_USDC_ADDRESS,
-      }
-    : null;
-const LIVE_REPO_ALLOWANCE = parseUsdc("11");
-const LIVE_AUCTION_ALLOWANCE = parseUsdc("10");
+const configuredLiveAddresses: LiveAddresses = {
+  repoLifecycle: import.meta.env.VITE_REPO_LIFECYCLE_ADDRESS || DEPLOYED_LIVE_ADDRESSES.repoLifecycle,
+  complianceAuction: import.meta.env.VITE_COMPLIANCE_AUCTION_ADDRESS || DEPLOYED_LIVE_ADDRESSES.complianceAuction,
+  signedPriceOracle: import.meta.env.VITE_SIGNED_PRICE_ORACLE_ADDRESS || DEPLOYED_LIVE_ADDRESSES.signedPriceOracle,
+  kycAccessRegistry: import.meta.env.VITE_KYC_ACCESS_REGISTRY_ADDRESS || DEPLOYED_LIVE_ADDRESSES.kycAccessRegistry,
+  usdc: import.meta.env.VITE_USDC_ADDRESS || HEDERA_TESTNET_USDC_ADDRESS,
+};
+const LIVE_ADDRESSES: LiveAddresses | null = Object.values(configuredLiveAddresses).every(Boolean)
+  ? configuredLiveAddresses
+  : null;
+const LIVE_REPO_STORAGE_KEY = `swan.live.repo-id.${configuredLiveAddresses.repoLifecycle.toLowerCase()}`;
+const LIVE_AUCTION_STORAGE_KEY = `swan.live.auction-id.${configuredLiveAddresses.complianceAuction.toLowerCase()}`;
+const LIVE_REPO_ALLOWANCE = parseUsdc("3");
+const LIVE_AUCTION_ALLOWANCE = parseUsdc("3");
 const LENDERS: FundingOffer[] = [
   {
     lenderId: "unverified",
@@ -71,11 +74,6 @@ type SessionState = "PLAYING" | "WON" | "LOST";
 type BestScores = Record<ChallengeDifficulty, number>;
 type Screen = "nest" | "bonds" | "pond" | "care" | "sale" | "book";
 type LiveForm = {
-  security: string;
-  securityDecimals: string;
-  quantity: string;
-  unitPrice: string;
-  stormPrice: string;
   principal: string;
   ratePercent: string;
   repoId: string;
@@ -88,17 +86,12 @@ type LiveForm = {
 
 const EMPTY_BEST_SCORES: BestScores = { CADET: 0, PRO: 0, EXPERT: 0 };
 const DEFAULT_LIVE_FORM: LiveForm = {
-  security: import.meta.env.VITE_ATS_SECURITY_ADDRESS ?? "",
-  securityDecimals: import.meta.env.VITE_ATS_SECURITY_DECIMALS ?? "0",
-  quantity: "2",
-  unitPrice: "6",
-  stormPrice: "2",
-  principal: "5",
+  principal: "2.5",
   ratePercent: "4.10",
-  repoId: "",
-  auctionId: "",
-  bid: "11",
-  coupon: "0.10",
+  repoId: window.localStorage.getItem(LIVE_REPO_STORAGE_KEY) ?? "",
+  auctionId: window.localStorage.getItem(LIVE_AUCTION_STORAGE_KEY) ?? "",
+  bid: "1.05",
+  coupon: "0.05",
   scheduleId: "",
   scheduledCaller: import.meta.env.VITE_SCHEDULED_CALLER_ADDRESS ?? "",
 };
@@ -133,11 +126,15 @@ export default function App() {
   });
   const [liveAccount, setLiveAccount] = useState<string>();
   const [usdcSnapshot, setUsdcSnapshot] = useState<UsdcSnapshot>();
+  const [kycRequest, setKycRequest] = useState<KycRequest>();
+  const [kycQueue, setKycQueue] = useState<KycRequest[]>([]);
+  const [isKycReviewer, setIsKycReviewer] = useState(false);
   const [liveEvidence, setLiveEvidence] = useState<TransactionEvidence>();
   const [liveHistory, setLiveHistory] = useState<{ label: string; evidence: TransactionEvidence }[]>([]);
   const [liveBusy, setLiveBusy] = useState<string>();
   const [liveForm, setLiveForm] = useState<LiveForm>(DEFAULT_LIVE_FORM);
-  const [liveReadout, setLiveReadout] = useState("Connect, then load an ATS bond.");
+  const [liveBonds, setLiveBonds] = useState<LiveBondForm[]>(DEFAULT_LIVE_BONDS);
+  const [liveReadout, setLiveReadout] = useState("Connect, then load the four-bond ATS basket.");
   const engine = arena.current;
   const rules = challengeRules(difficulty);
   const metrics = engine.metrics();
@@ -147,6 +144,7 @@ export default function App() {
   const hungerHearts = heartsFromCapacity(metrics.borrowingCapacity, engine.outstanding);
   const happyHearts =
     sessionState === "WON" ? 4 : sessionState === "LOST" ? 0 : engine.offers.length + (engine.selectedOffer ? 1 : 0);
+  const liveKycReady = Boolean(kycRequest?.fullyKyc);
 
   useEffect(() => {
     const onHash = () => setView(window.location.hash === "#play" ? "play" : "home");
@@ -167,6 +165,9 @@ export default function App() {
         liveClient.current = null;
         setLiveAccount(undefined);
         setUsdcSnapshot(undefined);
+        setKycRequest(undefined);
+        setKycQueue([]);
+        setIsKycReviewer(false);
         return;
       }
       // Never leave the previous signer usable while an account or connector
@@ -174,6 +175,9 @@ export default function App() {
       liveClient.current = null;
       setLiveAccount(undefined);
       setUsdcSnapshot(undefined);
+      setKycRequest(undefined);
+      setKycQueue([]);
+      setIsKycReviewer(false);
       if (connectedChainId !== 296) {
         setLiveReadout("Use RainbowKit to switch this wallet to Hedera testnet.");
         return;
@@ -184,21 +188,38 @@ export default function App() {
           chainId: 296,
         })) as Parameters<typeof LiveSwanClient.connect>[0];
         const client = await LiveSwanClient.connect(walletProvider, LIVE_ADDRESSES);
-        const snapshot = await client.usdcSnapshot();
+        const [snapshot, access, reviewer] = await Promise.all([
+          client.usdcSnapshot(),
+          client.kycSnapshot(),
+          client.isKycReviewer(),
+        ]);
+        const queue = reviewer ? await client.kycApplicants() : [];
         if (stale) return;
         liveClient.current = client;
         setLiveAccount(client.account);
         setUsdcSnapshot(snapshot);
-        setLiveReadout(`Wallet ready with ${formatUsdc(snapshot.balance)} test USDC.`);
+        setKycRequest(access);
+        setKycQueue(queue);
+        setIsKycReviewer(reviewer);
+        setLiveReadout(
+          access.fullyKyc
+            ? `Wallet is ATS KYC approved with ${formatUsdc(snapshot.balance)} test USDC.`
+            : `Wallet connected. Request ATS access before transacting.`,
+        );
         setNotice({
-          tone: "good",
-          text: `Wallet linked. ${formatUsdc(snapshot.balance)} ready for live settlement.`,
+          tone: access.fullyKyc ? "good" : "neutral",
+          text: access.fullyKyc
+            ? `Wallet linked and KYC approved across all four ATS bonds.`
+            : `Wallet linked. Submit an access request for compliance review.`,
         });
       } catch (error) {
         if (stale) return;
         liveClient.current = null;
         setLiveAccount(undefined);
         setUsdcSnapshot(undefined);
+        setKycRequest(undefined);
+        setKycQueue([]);
+        setIsKycReviewer(false);
         const message = error instanceof Error ? error.message : "Wallet connection failed";
         setLiveReadout(message);
         setNotice({ tone: "bad", text: message });
@@ -409,8 +430,29 @@ export default function App() {
     }
   }
 
+  async function refreshKyc(client = requireLiveClient()) {
+    const [access, reviewer] = await Promise.all([client.kycSnapshot(), client.isKycReviewer()]);
+    setKycRequest(access);
+    setIsKycReviewer(reviewer);
+    setKycQueue(reviewer ? await client.kycApplicants() : []);
+  }
+
+  async function requestLiveKyc(roles: 1 | 2 | 3) {
+    const result = await executeLive("KYC access requested", () => requireLiveClient().requestKyc(roles));
+    if (result) await refreshKyc();
+  }
+
+  async function reviewLiveKyc(applicant: string, approve: boolean) {
+    const result = await executeLive(approve ? "KYC access approved" : "KYC access rejected", () =>
+      approve ? requireLiveClient().approveKyc(applicant) : requireLiveClient().rejectKyc(applicant),
+    );
+    if (result) await refreshKyc();
+  }
+
   function setLiveField<Key extends keyof LiveForm>(key: Key, value: LiveForm[Key]) {
     setLiveForm((current) => ({ ...current, [key]: value }));
+    if (key === "repoId") window.localStorage.setItem(LIVE_REPO_STORAGE_KEY, value);
+    if (key === "auctionId") window.localStorage.setItem(LIVE_AUCTION_STORAGE_KEY, value);
   }
 
   function requireLiveClient(): LiveSwanClient {
@@ -423,16 +465,33 @@ export default function App() {
     return BigInt(value);
   }
 
-  function liveQuantity(): bigint {
-    const decimals = Number(liveForm.securityDecimals);
+  function liveQuantity(bond: LiveBondForm): bigint {
+    const decimals = Number(bond.decimals);
     if (!Number.isInteger(decimals) || decimals < 0 || decimals > 18) {
-      throw new Error("Security decimals must be between 0 and 18");
+      throw new Error(`${bond.symbol} decimals must be between 0 and 18`);
     }
-    return parseTokenUnits(liveForm.quantity, decimals);
+    return parseTokenUnits(bond.quantity, decimals);
   }
 
-  function liveTotalOracleValue(): bigint {
-    return (parseUsdc(liveForm.unitPrice) * liveQuantity()) / 10n ** BigInt(Number(liveForm.securityDecimals));
+  function selectedLiveBonds(): LiveBondForm[] {
+    const selected = liveBonds.filter((bond) => Number(bond.quantity) > 0);
+    if (selected.length === 0) throw new Error("Select at least one ATS bond");
+    for (const bond of selected) {
+      if (!bond.security) throw new Error(`${bond.symbol} has not been deployed or configured`);
+    }
+    return selected;
+  }
+
+  function liveTotalOracleValue(bond: LiveBondForm): bigint {
+    return (parseUsdc(bond.unitPrice) * liveQuantity(bond)) / 10n ** BigInt(Number(bond.decimals));
+  }
+
+  function setLiveBondField(
+    id: string,
+    key: "security" | "decimals" | "quantity" | "unitPrice" | "stormPrice",
+    value: string,
+  ) {
+    setLiveBonds((current) => current.map((bond) => (bond.id === id ? { ...bond, [key]: value } : bond)));
   }
 
   async function executeLive<T extends TransactionEvidence>(
@@ -453,7 +512,7 @@ export default function App() {
       }
       return result;
     } catch (error) {
-      const message = error instanceof Error ? error.message : `${label} failed`;
+      const message = readableLiveError(error, `${label} failed`);
       setLiveReadout(message);
       setNotice({ tone: "bad", text: message });
       return undefined;
@@ -462,16 +521,24 @@ export default function App() {
     }
   }
 
-  async function loadLiveSecurity() {
+  async function loadLiveSecurities() {
     try {
-      setLiveBusy("load security");
-      if (!liveForm.security) throw new Error("Enter an ATS security EVM address");
-      const decimals = await requireLiveClient().securityDecimals(liveForm.security);
-      setLiveField("securityDecimals", String(decimals));
-      setLiveReadout(`ATS bond loaded with ${decimals} decimals.`);
-      setNotice({ tone: "good", text: "ATS bond loaded. Publish its signed price next." });
+      setLiveBusy("load securities");
+      const client = requireLiveClient();
+      const selected = selectedLiveBonds();
+      const loaded = await Promise.all(
+        selected.map(async (bond) => ({ id: bond.id, decimals: await client.securityDecimals(bond.security) })),
+      );
+      setLiveBonds((current) =>
+        current.map((bond) => {
+          const result = loaded.find((item) => item.id === bond.id);
+          return result ? { ...bond, decimals: String(result.decimals) } : bond;
+        }),
+      );
+      setLiveReadout(`${loaded.length} ATS bonds loaded and ready.`);
+      setNotice({ tone: "good", text: "Live ATS basket loaded. Approve it first, then publish fresh prices last." });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not load ATS bond";
+      const message = error instanceof Error ? error.message : "Could not load the ATS basket";
       setLiveReadout(message);
       setNotice({ tone: "bad", text: message });
     } finally {
@@ -479,19 +546,35 @@ export default function App() {
     }
   }
 
-  async function publishLiveSecurityPrice(price = liveForm.unitPrice) {
-    await executeLive("signed bond price", () =>
-      requireLiveClient().publishSecurityPrice(liveForm.security, parseUsdc(price)),
-    );
+  async function publishLiveSecurityPrices() {
+    const result = await executeLive("signed basket prices", async () => {
+      const client = requireLiveClient();
+      let evidence: TransactionEvidence | undefined;
+      for (const bond of selectedLiveBonds()) {
+        evidence = await client.publishSecurityPrice(bond.security, parseUsdc(bond.unitPrice));
+      }
+      if (!evidence) throw new Error("No ATS prices were submitted");
+      return evidence;
+    });
+    if (result) {
+      setLiveReadout("All four prices are fresh. Request the repo now, before the 180-second oracle window expires.");
+      setNotice({ tone: "good", text: "Fresh prices confirmed. Click request repo immediately." });
+    }
   }
 
-  async function approveLiveSecurity(target: "repo" | "auction") {
-    await executeLive(`${target} bond approval`, () => {
+  async function approveLiveSecurities(target: "repo" | "auction") {
+    await executeLive(`${target} basket approval`, async () => {
       const client = requireLiveClient();
-      const quantity = liveQuantity();
-      return target === "repo"
-        ? client.approveSecurity(liveForm.security, quantity)
-        : client.approveSecurityForAuction(liveForm.security, quantity);
+      let evidence: TransactionEvidence | undefined;
+      for (const bond of selectedLiveBonds()) {
+        const quantity = liveQuantity(bond);
+        evidence =
+          target === "repo"
+            ? await client.approveSecurity(bond.security, quantity)
+            : await client.approveSecurityForAuction(bond.security, quantity);
+      }
+      if (!evidence) throw new Error("No ATS approvals were submitted");
+      return evidence;
     });
   }
 
@@ -500,18 +583,16 @@ export default function App() {
       const now = BigInt(Math.floor(Date.now() / 1_000));
       const result = await requireLiveClient().requestRepo({
         principal: parseUsdc(liveForm.principal),
-        fundingDeadline: now + 90n,
+        fundingDeadline: now + 180n,
         maturity: now + 600n,
         maintenanceBps: 10_500,
-        basket: [
-          {
-            security: liveForm.security,
-            quantity: liveQuantity(),
-            oraclePrice: parseUsdc(liveForm.unitPrice),
-            haircutBps: 1_000,
-            maxConcentrationBps: 10_000,
-          },
-        ],
+        basket: selectedLiveBonds().map((bond) => ({
+          security: bond.security,
+          quantity: liveQuantity(bond),
+          oraclePrice: parseUsdc(bond.unitPrice),
+          haircutBps: bond.haircutBps,
+          maxConcentrationBps: bond.maxConcentrationBps,
+        })),
       });
       setLiveField("repoId", result.entityId.toString());
       return result;
@@ -530,24 +611,39 @@ export default function App() {
     await executeLive("repo opened", () => requireLiveClient().openRepo(liveEntityId(liveForm.repoId, "Repo ID")));
   }
 
+  async function reclaimLiveRepo() {
+    await executeLive("expired repo reclaimed", () =>
+      requireLiveClient().reclaimUnfundedRepo(liveEntityId(liveForm.repoId, "Repo ID")),
+    );
+  }
+
   async function shockLiveRepo() {
     await executeLive("margin price applied", async () => {
       const client = requireLiveClient();
-      const price = parseUsdc(liveForm.stormPrice);
-      await client.publishSecurityPrice(liveForm.security, price);
-      return client.refreshPrice(liveEntityId(liveForm.repoId, "Repo ID"), 0n);
+      const repoId = liveEntityId(liveForm.repoId, "Repo ID");
+      let evidence: TransactionEvidence | undefined;
+      for (const [index, bond] of selectedLiveBonds().entries()) {
+        evidence = await client.publishRepoPrice(repoId, BigInt(index), parseUsdc(bond.stormPrice));
+      }
+      if (!evidence) throw new Error("No margin prices were submitted");
+      return evidence;
     });
   }
 
   async function addLiveCollateral() {
-    await executeLive("collateral added", () =>
-      requireLiveClient().addCollateral(liveEntityId(liveForm.repoId, "Repo ID"), 0n, liveQuantity()),
-    );
+    await executeLive("collateral added", () => {
+      const first = selectedLiveBonds()[0];
+      return requireLiveClient().addCollateral(
+        liveEntityId(liveForm.repoId, "Repo ID"),
+        0n,
+        parseTokenUnits("1", Number(first.decimals)),
+      );
+    });
   }
 
   async function partiallyRepayLiveRepo() {
     await executeLive("partial repayment", () =>
-      requireLiveClient().partiallyRepay(liveEntityId(liveForm.repoId, "Repo ID"), parseUsdc("1")),
+      requireLiveClient().partiallyRepay(liveEntityId(liveForm.repoId, "Repo ID"), parseUsdc("0.5")),
     );
   }
 
@@ -571,12 +667,14 @@ export default function App() {
 
   async function createLiveVoluntaryAuction() {
     await executeLive("voluntary auction", async () => {
+      const bond = selectedLiveBonds()[0];
+      const oracleValue = liveTotalOracleValue(bond);
       const result = await requireLiveClient().createVoluntaryAuction({
-        security: liveForm.security,
-        quantity: liveQuantity(),
-        reservePrice: parseUsdc(liveForm.principal),
+        security: bond.security,
+        quantity: liveQuantity(bond),
+        reservePrice: (oracleValue * 9n) / 10n,
         biddingDeadline: BigInt(Math.floor(Date.now() / 1_000) + 90),
-        oraclePrice: liveTotalOracleValue(),
+        oraclePrice: oracleValue,
         sanityToleranceBps: 1_500,
       });
       setLiveField("auctionId", result.entityId.toString());
@@ -840,10 +938,11 @@ export default function App() {
                 {screen === "bonds" && (
                   <div className="page">
                     <h2>Bonds</h2>
-                    <p>Pick the smallest nest that still feeds $1.00m.</p>
+                    <p>Pick the smallest nest that still feeds $1.00m. Every symbol is live on Hedera testnet.</p>
                     <div className="bond-list">
                       {engine.assets.map((asset) => {
                         const quantity = engine.basket.find((line) => line.assetId === asset.id)?.quantity ?? 0;
+                        const liveBond = liveBonds.find((bond) => bond.id === asset.id);
                         return (
                           <div className="bond" key={asset.id}>
                             <div>
@@ -852,6 +951,16 @@ export default function App() {
                                 {formatUsd(asset.price)} · {(asset.haircutBps / 100).toFixed(0)}% cut ·{" "}
                                 {asset.liquidity.toLowerCase()}
                               </small>
+                              {liveBond?.contractId && (
+                                <a
+                                  className="bond-testnet"
+                                  href={`https://hashscan.io/testnet/contract/${liveBond.contractId}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  testnet {liveBond.contractId} ↗
+                                </a>
+                              )}
                             </div>
                             <div className="stepper">
                               <button
@@ -1137,6 +1246,91 @@ export default function App() {
                         pending={!engine.couponEquivalentScheduled}
                       />
                     </div>
+                    <div className="kyc-box">
+                      <div className="kyc-head">
+                        <div>
+                          <small>ATS access passport</small>
+                          <b>{liveKycReady ? "approved" : (kycRequest?.status.toLowerCase() ?? "connect wallet")}</b>
+                        </div>
+                        <i className={liveKycReady ? "ok" : kycRequest?.status === "PENDING" ? "pending" : "fail"}>
+                          {liveKycReady ? "★" : kycRequest?.status === "PENDING" ? "…" : "×"}
+                        </i>
+                      </div>
+                      <p>
+                        One approval covers USTB, GRNB, MUNI and NSCR. The registry stores only your wallet and
+                        requested roles—no identity documents.
+                      </p>
+                      {!liveKycReady && kycRequest?.status !== "PENDING" && (
+                        <div className="btn-row wrap">
+                          <button
+                            className="toy"
+                            disabled={!liveAccount || Boolean(liveBusy)}
+                            onClick={() => void requestLiveKyc(1)}
+                          >
+                            repo access
+                          </button>
+                          <button
+                            className="toy"
+                            disabled={!liveAccount || Boolean(liveBusy)}
+                            onClick={() => void requestLiveKyc(2)}
+                          >
+                            bidder access
+                          </button>
+                          <button
+                            className="toy solid"
+                            disabled={!liveAccount || Boolean(liveBusy)}
+                            onClick={() => void requestLiveKyc(3)}
+                          >
+                            both roles
+                          </button>
+                        </div>
+                      )}
+                      {kycRequest?.status === "PENDING" && !liveKycReady && (
+                        <span className="kyc-waiting">Request submitted. Ask the compliance wallet to approve it.</span>
+                      )}
+                      {KYC_ACCESS_REGISTRY_ID && (
+                        <a
+                          href={`https://hashscan.io/testnet/contract/${KYC_ACCESS_REGISTRY_ID}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          registry {KYC_ACCESS_REGISTRY_ID} ↗
+                        </a>
+                      )}
+                      {isKycReviewer && (
+                        <div className="kyc-review">
+                          <b>Compliance queue</b>
+                          {kycQueue.filter((request) => request.status === "PENDING").length === 0 ? (
+                            <span>No pending wallets.</span>
+                          ) : (
+                            kycQueue
+                              .filter((request) => request.status === "PENDING")
+                              .map((request) => (
+                                <div className="kyc-applicant" key={request.applicant}>
+                                  <span>
+                                    <b>{shortWallet(request.applicant)}</b>
+                                    <small>{kycRoleLabel(request.roles)}</small>
+                                  </span>
+                                  <div>
+                                    <button
+                                      disabled={Boolean(liveBusy)}
+                                      onClick={() => void reviewLiveKyc(request.applicant, false)}
+                                    >
+                                      reject
+                                    </button>
+                                    <button
+                                      disabled={Boolean(liveBusy)}
+                                      onClick={() => void reviewLiveKyc(request.applicant, true)}
+                                    >
+                                      approve
+                                    </button>
+                                  </div>
+                                </div>
+                              ))
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <div className="cash-box">
                       <small>test USDC</small>
                       <b>
@@ -1149,14 +1343,14 @@ export default function App() {
                           disabled={!liveAccount || Boolean(liveBusy)}
                           onClick={() => void approveLiveUsdc("repo")}
                         >
-                          {liveBusy === "repo" ? "…" : "11 USDC nest"}
+                          {liveBusy === "repo" ? "…" : "3 USDC nest"}
                         </button>
                         <button
                           className="toy"
                           disabled={!liveAccount || Boolean(liveBusy)}
                           onClick={() => void approveLiveUsdc("auction")}
                         >
-                          {liveBusy === "auction" ? "…" : "10 USDC sale"}
+                          {liveBusy === "auction" ? "…" : "3 USDC sale"}
                         </button>
                       </div>
                       <a href="https://faucet.circle.com/" target="_blank" rel="noreferrer">
@@ -1178,28 +1372,42 @@ export default function App() {
                       </div>
                       <p>{liveReadout}</p>
                       <div className="live-fields">
-                        <LiveField
-                          className="wide"
-                          label="ATS bond EVM address"
-                          value={liveForm.security}
-                          placeholder="0x…"
-                          onChange={(value) => setLiveField("security", value)}
-                        />
-                        <LiveField
-                          label="bond quantity"
-                          value={liveForm.quantity}
-                          onChange={(value) => setLiveField("quantity", value)}
-                        />
-                        <LiveField
-                          label="decimals"
-                          value={liveForm.securityDecimals}
-                          onChange={(value) => setLiveField("securityDecimals", value)}
-                        />
-                        <LiveField
-                          label="unit price USDC"
-                          value={liveForm.unitPrice}
-                          onChange={(value) => setLiveField("unitPrice", value)}
-                        />
+                        <div className="live-basket">
+                          {liveBonds.map((bond) => (
+                            <div className="live-bond" key={bond.id}>
+                              <div className="live-bond-head">
+                                <b>{bond.symbol}</b>
+                                <span>
+                                  {(bond.haircutBps / 100).toFixed(0)}% cut · {bond.maxConcentrationBps / 100}% max
+                                </span>
+                              </div>
+                              <LiveField
+                                className="wide"
+                                label="ATS EVM address"
+                                value={bond.security}
+                                placeholder="deploy or enter 0x…"
+                                onChange={(value) => setLiveBondField(bond.id, "security", value)}
+                              />
+                              <div className="live-bond-values">
+                                <LiveField
+                                  label="quantity"
+                                  value={bond.quantity}
+                                  onChange={(value) => setLiveBondField(bond.id, "quantity", value)}
+                                />
+                                <LiveField
+                                  label="price USDC"
+                                  value={bond.unitPrice}
+                                  onChange={(value) => setLiveBondField(bond.id, "unitPrice", value)}
+                                />
+                                <LiveField
+                                  label="storm"
+                                  value={bond.stormPrice}
+                                  onChange={(value) => setLiveBondField(bond.id, "stormPrice", value)}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                         <LiveField
                           label="cash principal"
                           value={liveForm.principal}
@@ -1212,14 +1420,9 @@ export default function App() {
                           onChange={(value) => setLiveField("repoId", value)}
                         />
                         <LiveField
-                          label="rate %"
+                          label="lender offer rate %"
                           value={liveForm.ratePercent}
                           onChange={(value) => setLiveField("ratePercent", value)}
-                        />
-                        <LiveField
-                          label="storm unit price"
-                          value={liveForm.stormPrice}
-                          onChange={(value) => setLiveField("stormPrice", value)}
                         />
                         <LiveField
                           label="coupon USDC"
@@ -1254,22 +1457,22 @@ export default function App() {
                       </div>
 
                       <LiveActions title="1 · prepare borrower">
-                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void loadLiveSecurity()}>
-                          load bond
+                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void loadLiveSecurities()}>
+                          load basket
                         </button>
                         <button
                           disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void publishLiveSecurityPrice()}
+                          onClick={() => void approveLiveSecurities("repo")}
                         >
-                          sign price
+                          approve basket
                         </button>
                         <button
                           disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void approveLiveSecurity("repo")}
+                          onClick={() => void publishLiveSecurityPrices()}
                         >
-                          approve bond
+                          sign fresh prices
                         </button>
-                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void requestLiveRepo()}>
+                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void requestLiveRepo()}>
                           request repo
                         </button>
                       </LiveActions>
@@ -1281,14 +1484,17 @@ export default function App() {
                         >
                           approve USDC
                         </button>
-                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void offerLiveFunding()}>
+                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void offerLiveFunding()}>
                           offer rate
                         </button>
-                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void openLiveRepo()}>
-                          open after 90s
+                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void openLiveRepo()}>
+                          open after 3m
                         </button>
                         <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void readLiveRepo()}>
                           read state
+                        </button>
+                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void reclaimLiveRepo()}>
+                          reclaim expired
                         </button>
                       </LiveActions>
 
@@ -1298,7 +1504,7 @@ export default function App() {
                         </button>
                         <button
                           disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void approveLiveSecurity("repo")}
+                          onClick={() => void approveLiveSecurities("repo")}
                         >
                           approve top-up
                         </button>
@@ -1309,7 +1515,7 @@ export default function App() {
                           disabled={!liveAccount || Boolean(liveBusy)}
                           onClick={() => void partiallyRepayLiveRepo()}
                         >
-                          repay 1 USDC
+                          repay 0.5 USDC
                         </button>
                         <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void declareLiveDefault()}>
                           declare default
@@ -1353,7 +1559,7 @@ export default function App() {
                         </button>
                         <button
                           disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void approveLiveSecurity("auction")}
+                          onClick={() => void approveLiveSecurities("auction")}
                         >
                           approve sale lot
                         </button>
@@ -1369,7 +1575,7 @@ export default function App() {
                         >
                           approve bid cash
                         </button>
-                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void bidLiveAuction()}>
+                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void bidLiveAuction()}>
                           place bid
                         </button>
                         <button
@@ -1394,8 +1600,8 @@ export default function App() {
                         </button>
                       </LiveActions>
                       <small className="live-note">
-                        Switch MetaMask accounts and press link again for borrower, lender, verifier, and bidder roles.
-                        The bond and both Swan contracts must be KYC-granted in ATS.
+                        Switch RainbowKit accounts for borrower, lender, verifier, and bidder roles. New wallets request
+                        ATS access above; only the configured compliance wallet can approve them.
                       </small>
                       {liveHistory.length > 0 && (
                         <div className="live-evidence">
@@ -1631,8 +1837,32 @@ function bidderLabel(bidderId: string) {
   if (bidderId === "bidder-b") return "Meridian Bank";
   return "Unverified Wallet";
 }
+function shortWallet(address: string) {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+function kycRoleLabel(roles: number) {
+  if (roles === 3) return "repo participant + bidder";
+  if (roles === 2) return "auction bidder";
+  return "repo participant";
+}
 function isRuleError(error: unknown): error is { code: string } {
   return typeof error === "object" && error !== null && "code" in error;
+}
+function readableLiveError(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : fallback;
+  if (message.includes("0x19abf40e")) {
+    return "ORACLE_PRICE_EXPIRED: sign fresh prices, then request the repo within 180 seconds.";
+  }
+  if (message.includes("0x8756c20d")) {
+    return "ORACLE_FUTURE_PRICE: restart Swan so price signing uses Hedera consensus time.";
+  }
+  if (message.includes("0x756688fe")) {
+    return "ORACLE_NONCE_CHANGED: another price was submitted; sign the four prices again.";
+  }
+  if (message.includes("0x8baa579f")) {
+    return "ORACLE_SIGNER_REQUIRED: switch to the configured price-signer wallet.";
+  }
+  return message;
 }
 function loadBestScores(): BestScores {
   try {

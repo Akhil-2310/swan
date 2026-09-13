@@ -21,7 +21,18 @@ export type LiveAddresses = {
   repoLifecycle: string;
   complianceAuction: string;
   signedPriceOracle: string;
+  kycAccessRegistry: string;
   usdc: string;
+};
+
+export type KycRequestStatus = "NONE" | "PENDING" | "APPROVED" | "REJECTED";
+
+export type KycRequest = {
+  applicant: string;
+  submittedAt: number;
+  roles: number;
+  status: KycRequestStatus;
+  fullyKyc: boolean;
 };
 
 export type UsdcSnapshot = {
@@ -94,6 +105,12 @@ const ERC20_ABI = [
 ];
 
 const ORACLE_ABI = [
+  "error InvalidPrice()",
+  "error StalePrice()",
+  "error FuturePrice()",
+  "error InvalidNonce()",
+  "error InvalidSignature()",
+  "error PriceUnavailable()",
   "function nextNonce() view returns (uint256)",
   "function priceSigner() view returns (address)",
   "function securityPayloadHash(address security,uint256 price,uint256 observedAt,uint256 nonce) view returns (bytes32)",
@@ -102,10 +119,24 @@ const ORACLE_ABI = [
   "function submitPrice(address repo,uint256 repoId,uint256 collateralIndex,uint256 price,uint256 observedAt,uint256 nonce,bytes signature)",
 ];
 
+const KYC_REGISTRY_ABI = [
+  "function reviewer() view returns (address)",
+  "function requests(address) view returns (address applicant,uint64 submittedAt,uint8 roles,uint8 status)",
+  "function isFullyKyc(address applicant) view returns (bool)",
+  "function requestAccess(uint8 roles)",
+  "function approve(address applicant,string vcId,uint256 validTo)",
+  "function reject(address applicant)",
+  "function applicantCount() view returns (uint256)",
+  "function applicantAt(uint256 index) view returns (address)",
+];
+
+const KYC_STATUSES: KycRequestStatus[] = ["NONE", "PENDING", "APPROVED", "REJECTED"];
+
 export class LiveSwanClient {
   readonly repo: Contract;
   readonly auction: Contract;
   readonly oracle: Contract;
+  readonly kyc: Contract;
 
   private constructor(
     readonly provider: BrowserProvider,
@@ -116,6 +147,7 @@ export class LiveSwanClient {
     this.repo = new Contract(addresses.repoLifecycle, REPO_ABI, signer);
     this.auction = new Contract(addresses.complianceAuction, AUCTION_ABI, signer);
     this.oracle = new Contract(addresses.signedPriceOracle, ORACLE_ABI, signer);
+    this.kyc = new Contract(addresses.kycAccessRegistry, KYC_REGISTRY_ABI, signer);
   }
 
   static async connect(injected: Eip1193Provider, addresses: LiveAddresses): Promise<LiveSwanClient> {
@@ -167,8 +199,46 @@ export class LiveSwanClient {
     };
   }
 
+  async kycSnapshot(account = this.account): Promise<KycRequest> {
+    const [request, fullyKyc] = await Promise.all([this.kyc.requests(account), this.kyc.isFullyKyc(account)]);
+    const statusIndex = Number(request.status);
+    return {
+      applicant: getAddress(account),
+      submittedAt: Number(request.submittedAt),
+      roles: Number(request.roles),
+      status: KYC_STATUSES[statusIndex] ?? "NONE",
+      fullyKyc: Boolean(fullyKyc),
+    };
+  }
+
+  async isKycReviewer(): Promise<boolean> {
+    return getAddress(await this.kyc.reviewer()) === getAddress(this.account);
+  }
+
+  async requestKyc(roles: 1 | 2 | 3): Promise<TransactionEvidence> {
+    return evidence(await (await this.kyc.requestAccess(roles)).wait());
+  }
+
+  async approveKyc(applicant: string): Promise<TransactionEvidence> {
+    const validTo = BigInt(Math.floor(Date.now() / 1_000) + 365 * 24 * 60 * 60);
+    const vcId = `swan:${getAddress(applicant).toLowerCase()}:${Date.now()}`;
+    return evidence(await (await this.kyc.approve(applicant, vcId, validTo)).wait());
+  }
+
+  async rejectKyc(applicant: string): Promise<TransactionEvidence> {
+    return evidence(await (await this.kyc.reject(applicant)).wait());
+  }
+
+  async kycApplicants(): Promise<KycRequest[]> {
+    const count = Number(await this.kyc.applicantCount());
+    const applicants = await Promise.all(
+      Array.from({ length: count }, (_, index) => this.kyc.applicantAt(BigInt(index))),
+    );
+    return Promise.all(applicants.map((applicant) => this.kycSnapshot(String(applicant))));
+  }
+
   async publishSecurityPrice(security: string, price: bigint): Promise<TransactionEvidence> {
-    const observedAt = BigInt(Math.floor(Date.now() / 1_000));
+    const observedAt = await this.latestChainTimestamp();
     const nonce = BigInt(await this.oracle.nextNonce());
     const payloadHash = await this.oracle.securityPayloadHash(security, price, observedAt, nonce);
     const signer = await this.provider.getSigner();
@@ -183,7 +253,7 @@ export class LiveSwanClient {
   }
 
   async publishRepoPrice(repoId: bigint, collateralIndex: bigint, price: bigint): Promise<TransactionEvidence> {
-    const observedAt = BigInt(Math.floor(Date.now() / 1_000));
+    const observedAt = await this.latestChainTimestamp();
     const nonce = BigInt(await this.oracle.nextNonce());
     const payloadHash = await this.oracle.payloadHash(
       this.addresses.repoLifecycle,
@@ -360,6 +430,12 @@ export class LiveSwanClient {
   async repoSnapshot(repoId: bigint) {
     const [repo, capacity] = await Promise.all([this.repo.repos(repoId), this.repo.collateralCapacity(repoId)]);
     return { repo, capacity: BigInt(capacity) };
+  }
+
+  private async latestChainTimestamp(): Promise<bigint> {
+    const block = await this.provider.getBlock("latest");
+    if (!block) throw new Error("CHAIN_TIME_UNAVAILABLE: could not read Hedera's latest block");
+    return BigInt(block.timestamp);
   }
 }
 
