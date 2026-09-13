@@ -169,6 +169,7 @@
     "swan:test": "npm run test --workspace=@swan/ats-client && npm run test --workspace=@swan/repo && npm run test --workspace=@swan/live && npm run test --workspace=@swan/auction && npm run test --workspace=@swan/contracts",
     "swan:dev": "npm run dev --workspace=@swan/web",
     "swan:ats:seed": "node swan/scripts/seed-ats-bond.cjs",
+    "swan:kyc:deploy": "npm run deploy:kyc:testnet --workspace=@swan/contracts",
     "mass-payout:setup": "npm ci && npm run mass-payout:contracts:build && npm run mass-payout:sdk:build && npm run mass-payout:backend:build && npm run mass-payout:frontend:build",
     "mass-payout:setup:clean": "npm run mass-payout:clean && npm install && npm run mass-payout:build",
     "mass-payout:build": "npm run mass-payout:contracts:build && npm run mass-payout:sdk:build && npm run mass-payout:backend:build && npm run mass-payout:frontend:build",

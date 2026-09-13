@@ -8,6 +8,7 @@ Swan uses the smallest interface that matches ATS v8 facets in this monorepo.
 | Internal/external pause aggregation | `IPause.paused()`                                                                      |
 | Address or partial freeze           | `IFreeze.isFrozen(account)`                                                            |
 | KYC eligibility                     | `IKyc.getKycStatusFor(account)`                                                        |
+| Public access request/review        | `KycAccessRegistry.requestAccess` and reviewer-only batch `IKyc.grantKyc`              |
 | Explainable transfer preflight      | `IComplianceFacet.canTransferFrom(from, to, value, data)`                              |
 | Reserve/settle basket lines         | `ITransfer.transferFrom` / `ITransfer.transfer`                                        |
 | Clearing alternative                | `IClearingByPartition.clearingTransferFromByPartition` and approval/reclaim operations |
@@ -16,8 +17,8 @@ The TypeScript adapter in `packages/ats-client` intentionally exposes these conc
 
 ## Testnet sequence
 
-1. Create or load one ATS bond and activate KYC.
-2. Grant KYC to the borrower, eligible lenders/bidders, RepoLifecycle, and ComplianceAuction addresses.
+1. Create or load the four ATS demo bonds and activate KYC on every series.
+2. Grant KYC to the borrower and escrow contracts during seeding; public lenders/bidders request access through the reviewer-controlled registry.
 3. Keep one lender and one bidder without KYC as negative fixtures.
 4. Issue several bond series to the borrower and approve or clear the chosen quantities into RepoLifecycle.
 5. Associate eligible lenders with native Hedera testnet USDC `0.0.429274`, fund them from Circle's testnet faucet, and approve RepoLifecycle for the scaled live principal.

@@ -17,6 +17,7 @@ The auction is a terminal liquidation and voluntary-sale rail—not the product'
 - **Signed oracle:** fresh observations are signer-authorized, nonce-protected, and replay-resistant; anyone may relay them.
 - **Live adapter:** validates Hedera testnet chain `296`, pins the cash leg to native testnet USDC `0.0.429274`, handles six-decimal amounts and allowances, wraps wallet contract writes, and resolves transaction evidence through Mirror Node.
 - **RainbowKit connection:** supplies a wallet modal, automatic account/disconnect synchronization, and one-click switching to Swan's custom Hedera testnet chain through wagmi.
+- **Self-service ATS access:** any connected wallet can request repo, bidder, or combined access; the configured compliance wallet reviews the on-chain queue and one approval grants ATS KYC across all four bonds.
 - **Arena score:** grades collateral efficiency, funding quality, risk management, and compliance out of 1,000.
 - **Replayable challenges:** seeded bond prices plus Cadet, Pro, and Expert rule sets vary shock severity, maintenance requirements, and decision windows.
 - **Real game clocks:** funding closes automatically when its countdown expires; an uncured margin call automatically enters liquidation.
@@ -24,7 +25,7 @@ The auction is a terminal liquidation and voluntary-sale rail—not the product'
 - **Challenge results:** successful closing or failure produces a final grade, capital-used result, replay control, and browser-persisted best score per difficulty.
 - **Native scheduling:** creates a delayed Hedera `ContractExecuteTransaction` for maturity close with `waitForExpiry=true`.
 
-The arena uses deterministic million-dollar local fixtures and says so in the network badge. The live evidence path is deliberately scaled to a 10 USDC principal because public faucet tokens are limited. Solidity contracts and tests implement the same critical lifecycle, but nothing is represented as Hedera testnet evidence until it has real transaction IDs.
+The arena uses deterministic million-dollar local fixtures and says so in the network badge. Its four symbols are also deployed as real zero-decimal ATS bonds for the Book evidence lane. The live repo uses a 2.5 USDC principal and 3 USDC approvals so a multi-wallet demo fits limited faucet balances. Solidity contracts and tests implement the same critical lifecycle, but nothing is represented as Hedera testnet evidence until it has real transaction IDs.
 
 ## Run it
 
@@ -63,7 +64,7 @@ swan/
   packages/repo/            Deterministic repo lifecycle and optimizer
   packages/live/            Hedera wallet, contract and Mirror Node adapter
   packages/auction/         Voluntary/default auction state machine
-  contracts/                RepoLifecycle + ComplianceAuction Solidity
+  contracts/                Repo, auction, oracle and KYC registry Solidity
   docs/                     Architecture and ATS integration notes
 ```
 
@@ -75,10 +76,13 @@ Copy `contracts/.env.example` to `contracts/.env`, set a funded Hedera ECDSA key
 npm run check:testnet --workspace=@swan/contracts
 npm run deploy:testnet --workspace=@swan/contracts
 npm run swan:ats:seed
+npm run swan:kyc:deploy
 npm run verify:testnet --workspace=@swan/contracts
 ```
 
-The seed command creates or reuses a real ATS bond, grants the required ATS roles and KYC to the holder plus both Swan escrows, and issues demo units. The deployment script pins official Hedera testnet USDC and configures `RepoLifecycle` as the only liquidation router for `ComplianceAuction`.
+The resumable seed command creates or reuses `USTB-28`, `GRNB-30`, `MUNI-31`, and `NSCR-29`, grants the required ATS roles and KYC to the holder plus both Swan escrows, and issues demo units of every series. `swan:kyc:deploy` creates the reviewer-controlled access registry and grants it only the ATS KYC role on those bonds. Their addresses are written to the testnet deployment manifest and loaded automatically by the Book screen, so public users do not need to be listed in an environment file. The deployment script pins official Hedera testnet USDC and configures `RepoLifecycle` as the only liquidation router for `ComplianceAuction`.
+
+The built-in review queue is a testnet onboarding workflow, not an identity vendor. In production, the reviewer should approve only after an external identity/AML process; Swan deliberately keeps personal documents off-chain.
 
 The deployed testnet IDs and the successful two-counterparty scheduled-close proof are recorded in [`deployments/hedera-testnet.json`](deployments/hedera-testnet.json) and [`deployments/testnet-evidence.json`](deployments/testnet-evidence.json).
 

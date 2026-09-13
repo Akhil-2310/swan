@@ -23,7 +23,7 @@ The web app uses RainbowKit with Hedera testnet as its only supported chain. Ins
 npm run deploy:testnet --workspace=@swan/contracts
 ```
 
-The deployment order is `SignedPriceOracle → RepoLifecycle → ComplianceAuction`. RepoLifecycle is the auction's immutable liquidation router. Both lifecycle contracts are pinned to native testnet USDC, and the configured compliance reviewer also defaults to the schedule verifier. Copy the three output addresses into the web `.env`.
+The deployment order is `SignedPriceOracle → RepoLifecycle → ComplianceAuction`. RepoLifecycle is the auction's immutable liquidation router. Both lifecycle contracts are pinned to native testnet USDC, and the configured compliance reviewer also defaults to the schedule verifier. The committed testnet manifest is the web app's default; environment addresses are optional overrides.
 
 ## 3. Prepare ATS collateral
 
@@ -31,16 +31,26 @@ For the reproducible Swan fixture, run:
 
 ```bash
 npm run swan:ats:seed
+npm run swan:kyc:deploy
 npm run verify:testnet --workspace=@swan/contracts
 ```
 
-The seed script is resumable. It creates or reuses `Swan Treasury 2027` (`SWAN27`), installs the issuer/SSI/KYC roles, registers the issuer, grants ATS KYC to the holder and both escrow contracts, and ensures the holder has 20 bond units.
+The seed script is resumable. It creates or reuses the four live arena series—`USTB-28`, `GRNB-30`, `MUNI-31`, and `NSCR-29`—installs the issuer/SSI/KYC roles, registers the issuer, grants ATS KYC to the holder and both escrow contracts, and ensures the holder has 20 units of every bond. The registry deployment then receives the narrowly scoped ATS KYC role on every series. Both commands record addresses in `deployments/hedera-testnet.json`, which the Book screen imports automatically.
 
-For a multi-wallet judging demo, repeat the participant preparation in the starter-pack ATS app:
+Do not put public user wallets in `.env`. After connecting, any wallet can open **Book → ATS access passport** and request repo, bidder, or combined access. Requests are public, but approval is reviewer-only:
+
+1. Wallet B submits **both roles** and waits in the on-chain queue.
+2. Switch RainbowKit to the configured compliance wallet (Wallet A).
+3. In **Compliance queue**, verify the wallet against the demo's off-chain identity policy and click **approve**.
+4. Switch back to Wallet B. Its passport reads **approved** across all four bonds and lender/bidder actions unlock.
+
+The registry stores only the applicant wallet, requested role bits, timestamp, and status. It does not store documents or personally identifiable information. For production, connect approval to a real identity and AML provider; the included queue is the auditable hackathon review boundary.
+
+For a multi-wallet judging demo, the seeded issuer wallet already owns the bonds and acts as borrower/reviewer. Use a second wallet for the competing lender and bidder:
 
 1. Connect the issuer wallet and create at least two fixed-rate bonds.
 2. Issue units to the borrower.
-3. Grant ATS KYC to the borrower, lenders, bidders, RepoLifecycle, and ComplianceAuction.
+3. Grant public participants ATS KYC through Swan's access passport and reviewer queue.
 4. Keep one lender/bidder without KYC for the negative path.
 5. Approve RepoLifecycle for each basket quantity, or use the ATS clearing workflow after confirming its testnet reclaim semantics.
 6. Confirm `paused() == false`, neither side is frozen, and `canTransferFrom` succeeds.
@@ -55,11 +65,11 @@ Use Circle's native Hedera testnet USDC instead of deploying a cash token:
 
 Associate each participating wallet with the token before requesting faucet funds if the wallet has no available automatic-association slot. The web app pins this exact token address and exposes explicit allowance transactions for RepoLifecycle and ComplianceAuction.
 
-Keep the live scenario small enough for faucet balances: use a `10 USDC` principal (`10_000_000` base units), zero-decimal ATS bond quantities, and oracle prices in six-decimal USDC base units per whole bond. `MockTestCash` remains only in local contract tests so balances and transfer failures can be controlled deterministically.
+Keep the live scenario small enough for faucet balances: the Book defaults use a `2.5 USDC` principal (`2_500_000` base units), at most `3 USDC` per approval, one zero-decimal unit from each ATS series, and oracle prices in six-decimal USDC base units per whole bond. The live demo uses a three-minute price-freshness window and a three-minute lender funding window. Approve the basket before signing prices, then request the repo while those prices remain fresh. `MockTestCash` remains only in local contract tests so balances and transfer failures can be controlled deterministically.
 
 ## 4. Execute the evidence path
 
-1. Publish fresh signed prices, approve RepoLifecycle for `11 USDC`, then request a 10-USDC multi-series repo and retain the transaction hash.
+1. Publish fresh signed prices for all four bonds, approve each bond quantity, then request the 2.5-USDC multi-series repo and retain the transaction hash.
 2. Submit one rejected ineligible offer and two eligible funded rates.
 3. Advance past the funding deadline and open the repo.
 4. Relay fresh repo-specific signed prices that create a margin call.
