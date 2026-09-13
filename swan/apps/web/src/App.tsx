@@ -642,9 +642,16 @@ export default function App() {
   }
 
   async function partiallyRepayLiveRepo() {
-    await executeLive("partial repayment", () =>
-      requireLiveClient().partiallyRepay(liveEntityId(liveForm.repoId, "Repo ID"), parseUsdc("0.5")),
-    );
+    await executeLive("partial repayment", async () => {
+      const client = requireLiveClient();
+      const amount = parseUsdc("0.5");
+      const cash = await client.usdcSnapshot();
+      if (cash.balance < amount) throw new Error("Wallet A needs at least 0.5 USDC to cure this margin call");
+      if (cash.repoAllowance < amount) {
+        throw new Error("APPROVAL_REQUIRED: Wallet A must click approve repay cash before repaying");
+      }
+      return client.partiallyRepay(liveEntityId(liveForm.repoId, "Repo ID"), amount);
+    });
   }
 
   async function declareLiveDefault() {
@@ -663,6 +670,34 @@ export default function App() {
       setLiveField("auctionId", result.entityIds[0].toString());
       return result;
     });
+  }
+
+  async function publishLiveLiquidationPrices() {
+    const result = await executeLive("fresh liquidation prices", async () => {
+      const client = requireLiveClient();
+      let evidence: TransactionEvidence | undefined;
+      for (const bond of selectedLiveBonds()) {
+        evidence = await client.publishSecurityPrice(bond.security, parseUsdc(bond.stormPrice));
+      }
+      if (!evidence) throw new Error("No liquidation prices were submitted");
+      return evidence;
+    });
+    if (result) {
+      setLiveReadout("Liquidation prices are fresh. Switch to Wallet B and route the default within three minutes.");
+    }
+  }
+
+  async function publishLiveVoluntaryPrices() {
+    const result = await executeLive("fresh voluntary-sale prices", async () => {
+      const client = requireLiveClient();
+      let evidence: TransactionEvidence | undefined;
+      for (const bond of selectedLiveBonds()) {
+        evidence = await client.publishSecurityPrice(bond.security, parseUsdc(bond.unitPrice));
+      }
+      if (!evidence) throw new Error("No voluntary-sale prices were submitted");
+      return evidence;
+    });
+    if (result) setLiveReadout("Market prices are fresh. Approve the sale lot and list it within three minutes.");
   }
 
   async function createLiveVoluntaryAuction() {
@@ -916,6 +951,19 @@ export default function App() {
                         </li>
                       ))}
                     </ol>
+                    <div className="practice-score">
+                      <div className="grade-pill">
+                        <b>{score.grade}</b>
+                        <span>{score.total} / 1000</span>
+                      </div>
+                      <div>
+                        <Score label="efficiency" value={score.collateralEfficiency} max={300} />
+                        <Score label="funding" value={score.fundingQuality} max={250} />
+                        <Score label="risk" value={score.riskManagement} max={300} />
+                        <Score label="care" value={score.compliance} max={150} />
+                      </div>
+                    </div>
+                    {score.assistancePenalty > 0 && <p className="warn-copy">helper −{score.assistancePenalty}</p>}
                     {sessionState !== "PLAYING" && (
                       <div className={`result result-${sessionState.toLowerCase()}`}>
                         <h3>{sessionState === "WON" ? "Swan came home" : "Nest went quiet"}</h3>
@@ -1008,6 +1056,75 @@ export default function App() {
                         </>
                       )}
                     </div>
+                    <LiveLane title="Collateral draft" account={liveAccount} readout={liveReadout}>
+                      <div className="live-fields">
+                        <div className="live-basket">
+                          {liveBonds.map((bond) => (
+                            <div className="live-bond" key={bond.id}>
+                              <div className="live-bond-head">
+                                <b>{bond.symbol}</b>
+                                <span>
+                                  {(bond.haircutBps / 100).toFixed(0)}% cut · {bond.maxConcentrationBps / 100}% max
+                                </span>
+                              </div>
+                              <div className="live-bond-values two">
+                                <LiveField
+                                  label="quantity"
+                                  value={bond.quantity}
+                                  onChange={(value) => setLiveBondField(bond.id, "quantity", value)}
+                                />
+                                <LiveField
+                                  label="price USDC"
+                                  value={bond.unitPrice}
+                                  onChange={(value) => setLiveBondField(bond.id, "unitPrice", value)}
+                                />
+                              </div>
+                              {bond.contractId && (
+                                <a
+                                  className="bond-testnet"
+                                  href={`https://hashscan.io/testnet/contract/${bond.contractId}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  ATS {bond.contractId} ↗
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <LiveField
+                          label="cash principal"
+                          value={liveForm.principal}
+                          onChange={(value) => setLiveField("principal", value)}
+                        />
+                        <LiveField
+                          label="repo ID"
+                          value={liveForm.repoId}
+                          placeholder="created automatically"
+                          onChange={(value) => setLiveField("repoId", value)}
+                        />
+                      </div>
+                      <LiveActions title="Wallet A · borrower">
+                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void loadLiveSecurities()}>
+                          load basket
+                        </button>
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void approveLiveSecurities("repo")}
+                        >
+                          approve basket
+                        </button>
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void publishLiveSecurityPrices()}
+                        >
+                          sign fresh prices
+                        </button>
+                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void requestLiveRepo()}>
+                          request repo
+                        </button>
+                      </LiveActions>
+                    </LiveLane>
                   </div>
                 )}
 
@@ -1064,6 +1181,47 @@ export default function App() {
                         ))
                       )}
                     </div>
+                    <LiveLane title="Funding race" account={liveAccount} readout={liveReadout}>
+                      <div className="live-fields">
+                        <LiveField
+                          label="repo ID"
+                          value={liveForm.repoId}
+                          placeholder="from Bonds"
+                          onChange={(value) => setLiveField("repoId", value)}
+                        />
+                        <LiveField
+                          label="offer rate %"
+                          value={liveForm.ratePercent}
+                          onChange={(value) => setLiveField("ratePercent", value)}
+                        />
+                      </div>
+                      <LiveActions title="Wallet B · eligible lender">
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void approveLiveUsdc("repo")}
+                        >
+                          approve 3 USDC
+                        </button>
+                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void offerLiveFunding()}>
+                          offer rate
+                        </button>
+                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void openLiveRepo()}>
+                          open after 3m
+                        </button>
+                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void readLiveRepo()}>
+                          read state
+                        </button>
+                      </LiveActions>
+                      <LiveActions title="Wallet A · no-offer recovery">
+                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void reclaimLiveRepo()}>
+                          reclaim expired
+                        </button>
+                      </LiveActions>
+                      <small className="live-note">
+                        Switch to Wallet B before approving cash. If no lender offers, Wallet A reclaims the basket
+                        after the window.
+                      </small>
+                    </LiveLane>
                   </div>
                 )}
 
@@ -1146,6 +1304,111 @@ export default function App() {
                         </button>
                       </div>
                     )}
+                    <LiveLane title="Margin and maturity" account={liveAccount} readout={liveReadout}>
+                      <div className="live-fields">
+                        <LiveField
+                          label="repo ID"
+                          value={liveForm.repoId}
+                          placeholder="from Bonds"
+                          onChange={(value) => setLiveField("repoId", value)}
+                        />
+                        <LiveField
+                          label="coupon USDC"
+                          value={liveForm.coupon}
+                          onChange={(value) => setLiveField("coupon", value)}
+                        />
+                        <div className="live-basket compact">
+                          {liveBonds.map((bond) => (
+                            <div className="live-bond" key={bond.id}>
+                              <div className="live-bond-head">
+                                <b>{bond.symbol}</b>
+                                <LiveField
+                                  label="storm price"
+                                  value={bond.stormPrice}
+                                  onChange={(value) => setLiveBondField(bond.id, "stormPrice", value)}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <LiveField
+                          className="wide"
+                          label="Hedera coupon schedule ID"
+                          value={liveForm.scheduleId}
+                          placeholder="0.0.xxxxx"
+                          onChange={(value) => setLiveField("scheduleId", value)}
+                        />
+                        <LiveField
+                          className="wide"
+                          label="scheduled caller (long-zero EVM)"
+                          value={liveForm.scheduledCaller}
+                          placeholder="0x0000…account number"
+                          onChange={(value) => setLiveField("scheduledCaller", value)}
+                        />
+                      </div>
+                      <LiveActions title="Margin call · Wallet A">
+                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void shockLiveRepo()}>
+                          price storm
+                        </button>
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void approveLiveSecurities("repo")}
+                        >
+                          approve top-up
+                        </button>
+                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void addLiveCollateral()}>
+                          add collateral
+                        </button>
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void approveLiveUsdc("repo")}
+                        >
+                          approve repay cash
+                        </button>
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void partiallyRepayLiveRepo()}
+                        >
+                          repay 0.5 USDC
+                        </button>
+                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void declareLiveDefault()}>
+                          declare default
+                        </button>
+                      </LiveActions>
+                      <LiveActions title="Coupon and close · Wallet B → Wallet A">
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void authorizeLiveScheduledCaller()}
+                        >
+                          authorize caller
+                        </button>
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void verifyLiveCouponSchedule()}
+                        >
+                          verify schedule
+                        </button>
+                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void payLiveCoupon()}>
+                          pay coupon
+                        </button>
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void approveLiveUsdc("repo")}
+                        >
+                          approve close cash
+                        </button>
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() =>
+                            void executeLive("repo closed", () =>
+                              requireLiveClient().closeRepo(liveEntityId(liveForm.repoId, "Repo ID")),
+                            )
+                          }
+                        >
+                          close at 10m
+                        </button>
+                      </LiveActions>
+                    </LiveLane>
                   </div>
                 )}
 
@@ -1211,41 +1474,99 @@ export default function App() {
                         )}
                       </>
                     )}
+                    <LiveLane title="Compliant secondary auction" account={liveAccount} readout={liveReadout}>
+                      <div className="live-fields">
+                        <LiveField
+                          label="repo ID"
+                          value={liveForm.repoId}
+                          placeholder="for liquidation"
+                          onChange={(value) => setLiveField("repoId", value)}
+                        />
+                        <LiveField
+                          label="auction ID"
+                          value={liveForm.auctionId}
+                          placeholder="created automatically"
+                          onChange={(value) => setLiveField("auctionId", value)}
+                        />
+                        <LiveField
+                          label="bid USDC"
+                          value={liveForm.bid}
+                          onChange={(value) => setLiveField("bid", value)}
+                        />
+                      </div>
+                      <LiveActions title="Default sale · Wallet A then Wallet B">
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void publishLiveLiquidationPrices()}
+                        >
+                          refresh sale prices
+                        </button>
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void createLiveLiquidation()}
+                        >
+                          route default
+                        </button>
+                      </LiveActions>
+                      <LiveActions title="Voluntary sale · Wallet A">
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void publishLiveVoluntaryPrices()}
+                        >
+                          sign market prices
+                        </button>
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void approveLiveSecurities("auction")}
+                        >
+                          approve sale lot
+                        </button>
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void createLiveVoluntaryAuction()}
+                        >
+                          voluntary list
+                        </button>
+                      </LiveActions>
+                      <LiveActions title="Eligible bidder">
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() => void approveLiveUsdc("auction")}
+                        >
+                          approve bid cash
+                        </button>
+                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void bidLiveAuction()}>
+                          place bid
+                        </button>
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() =>
+                            void executeLive("auction closed", () =>
+                              requireLiveClient().closeAuction(liveEntityId(liveForm.auctionId, "Auction ID")),
+                            )
+                          }
+                        >
+                          close after 90s
+                        </button>
+                        <button
+                          disabled={!liveAccount || Boolean(liveBusy)}
+                          onClick={() =>
+                            void executeLive("auction settled", () =>
+                              requireLiveClient().settleAuction(liveEntityId(liveForm.auctionId, "Auction ID")),
+                            )
+                          }
+                        >
+                          settle DvP
+                        </button>
+                      </LiveActions>
+                    </LiveLane>
                   </div>
                 )}
 
                 {screen === "book" && (
                   <div className="page">
                     <h2>Book</h2>
-                    <div className="grade-pill">
-                      <b>{score.grade}</b>
-                      <span>{score.total} / 1000</span>
-                    </div>
-                    <Score label="efficiency" value={score.collateralEfficiency} max={300} />
-                    <Score label="funding" value={score.fundingQuality} max={250} />
-                    <Score label="risk" value={score.riskManagement} max={300} />
-                    <Score label="care" value={score.compliance} max={150} />
-                    {score.assistancePenalty > 0 && <p className="warn-copy">helper −{score.assistancePenalty}</p>}
-                    <div className="checks">
-                      <Check label="borrower kyc" value="granted" ok />
-                      <Check label="token" value="active" ok />
-                      <Check
-                        label="feed target"
-                        value={metrics.borrowingCapacity >= engine.terms.requiredCash ? "covered" : "hungry"}
-                        ok={metrics.borrowingCapacity >= engine.terms.requiredCash}
-                      />
-                      <Check
-                        label="concentration"
-                        value={metrics.errors.some((error) => error.includes("concentration")) ? "too full" : "ok"}
-                        ok={!metrics.errors.some((error) => error.includes("concentration"))}
-                      />
-                      <Check
-                        label="coupon snack"
-                        value={engine.couponEquivalentScheduled ? "scheduled" : "pending"}
-                        ok={engine.couponEquivalentScheduled}
-                        pending={!engine.couponEquivalentScheduled}
-                      />
-                    </div>
+                    <p>Compliance access, deployed contracts, and immutable transaction receipts.</p>
                     <div className="kyc-box">
                       <div className="kyc-head">
                         <div>
@@ -1337,22 +1658,6 @@ export default function App() {
                         {usdcSnapshot ? formatUsdc(usdcSnapshot.balance) : liveAccount ? "reading…" : "wallet asleep"}
                       </b>
                       <span>{HEDERA_TESTNET_USDC_TOKEN_ID}</span>
-                      <div className="btn-row wrap">
-                        <button
-                          className="toy"
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void approveLiveUsdc("repo")}
-                        >
-                          {liveBusy === "repo" ? "…" : "3 USDC nest"}
-                        </button>
-                        <button
-                          className="toy"
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void approveLiveUsdc("auction")}
-                        >
-                          {liveBusy === "auction" ? "…" : "3 USDC sale"}
-                        </button>
-                      </div>
                       <a href="https://faucet.circle.com/" target="_blank" rel="noreferrer">
                         faucet
                       </a>
@@ -1362,248 +1667,37 @@ export default function App() {
                         </a>
                       )}
                     </div>
-                    <div className="live-console">
-                      <div className="live-console-head">
-                        <div>
-                          <small>hedera testnet</small>
-                          <b>Live repo lane</b>
-                        </div>
-                        <span className={liveAccount ? "ready" : "sleeping"}>{liveAccount ? "linked" : "offline"}</span>
+                    {LIVE_ADDRESSES && (
+                      <div className="contract-box">
+                        <b>Deployed on Hedera testnet</b>
+                        {[
+                          ["Repo lifecycle", LIVE_ADDRESSES.repoLifecycle],
+                          ["Compliance auction", LIVE_ADDRESSES.complianceAuction],
+                          ["Signed price oracle", LIVE_ADDRESSES.signedPriceOracle],
+                          ["KYC access registry", LIVE_ADDRESSES.kycAccessRegistry],
+                        ].map(([label, address]) => (
+                          <a
+                            key={label}
+                            href={`https://hashscan.io/testnet/contract/${address}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <span>{label}</span>
+                            <b>{shortWallet(address)}</b>
+                            <small>HashScan ↗</small>
+                          </a>
+                        ))}
+                        <span className="contract-note">4 ATS bonds · native testnet USDC · chain 296</span>
                       </div>
-                      <p>{liveReadout}</p>
-                      <div className="live-fields">
-                        <div className="live-basket">
-                          {liveBonds.map((bond) => (
-                            <div className="live-bond" key={bond.id}>
-                              <div className="live-bond-head">
-                                <b>{bond.symbol}</b>
-                                <span>
-                                  {(bond.haircutBps / 100).toFixed(0)}% cut · {bond.maxConcentrationBps / 100}% max
-                                </span>
-                              </div>
-                              <LiveField
-                                className="wide"
-                                label="ATS EVM address"
-                                value={bond.security}
-                                placeholder="deploy or enter 0x…"
-                                onChange={(value) => setLiveBondField(bond.id, "security", value)}
-                              />
-                              <div className="live-bond-values">
-                                <LiveField
-                                  label="quantity"
-                                  value={bond.quantity}
-                                  onChange={(value) => setLiveBondField(bond.id, "quantity", value)}
-                                />
-                                <LiveField
-                                  label="price USDC"
-                                  value={bond.unitPrice}
-                                  onChange={(value) => setLiveBondField(bond.id, "unitPrice", value)}
-                                />
-                                <LiveField
-                                  label="storm"
-                                  value={bond.stormPrice}
-                                  onChange={(value) => setLiveBondField(bond.id, "stormPrice", value)}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        <LiveField
-                          label="cash principal"
-                          value={liveForm.principal}
-                          onChange={(value) => setLiveField("principal", value)}
-                        />
-                        <LiveField
-                          label="repo ID"
-                          value={liveForm.repoId}
-                          placeholder="created automatically"
-                          onChange={(value) => setLiveField("repoId", value)}
-                        />
-                        <LiveField
-                          label="lender offer rate %"
-                          value={liveForm.ratePercent}
-                          onChange={(value) => setLiveField("ratePercent", value)}
-                        />
-                        <LiveField
-                          label="coupon USDC"
-                          value={liveForm.coupon}
-                          onChange={(value) => setLiveField("coupon", value)}
-                        />
-                        <LiveField
-                          className="wide"
-                          label="Hedera coupon schedule ID"
-                          value={liveForm.scheduleId}
-                          placeholder="0.0.xxxxx"
-                          onChange={(value) => setLiveField("scheduleId", value)}
-                        />
-                        <LiveField
-                          className="wide"
-                          label="scheduled caller (long-zero EVM)"
-                          value={liveForm.scheduledCaller}
-                          placeholder="0x0000…account number"
-                          onChange={(value) => setLiveField("scheduledCaller", value)}
-                        />
-                        <LiveField
-                          label="auction ID"
-                          value={liveForm.auctionId}
-                          placeholder="created automatically"
-                          onChange={(value) => setLiveField("auctionId", value)}
-                        />
-                        <LiveField
-                          label="bid USDC"
-                          value={liveForm.bid}
-                          onChange={(value) => setLiveField("bid", value)}
-                        />
+                    )}
+                    <div className="evidence-book">
+                      <div>
+                        <small>immutable audit trail</small>
+                        <b>Transaction receipts</b>
                       </div>
-
-                      <LiveActions title="1 · prepare borrower">
-                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void loadLiveSecurities()}>
-                          load basket
-                        </button>
-                        <button
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void approveLiveSecurities("repo")}
-                        >
-                          approve basket
-                        </button>
-                        <button
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void publishLiveSecurityPrices()}
-                        >
-                          sign fresh prices
-                        </button>
-                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void requestLiveRepo()}>
-                          request repo
-                        </button>
-                      </LiveActions>
-
-                      <LiveActions title="2 · switch to eligible lender">
-                        <button
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void approveLiveUsdc("repo")}
-                        >
-                          approve USDC
-                        </button>
-                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void offerLiveFunding()}>
-                          offer rate
-                        </button>
-                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void openLiveRepo()}>
-                          open after 3m
-                        </button>
-                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void readLiveRepo()}>
-                          read state
-                        </button>
-                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void reclaimLiveRepo()}>
-                          reclaim expired
-                        </button>
-                      </LiveActions>
-
-                      <LiveActions title="3 · risk and remedy">
-                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void shockLiveRepo()}>
-                          price storm
-                        </button>
-                        <button
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void approveLiveSecurities("repo")}
-                        >
-                          approve top-up
-                        </button>
-                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void addLiveCollateral()}>
-                          add collateral
-                        </button>
-                        <button
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void partiallyRepayLiveRepo()}
-                        >
-                          repay 0.5 USDC
-                        </button>
-                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void declareLiveDefault()}>
-                          declare default
-                        </button>
-                      </LiveActions>
-
-                      <LiveActions title="4 · coupon and close">
-                        <button
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void authorizeLiveScheduledCaller()}
-                        >
-                          authorize caller
-                        </button>
-                        <button
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void verifyLiveCouponSchedule()}
-                        >
-                          verify schedule
-                        </button>
-                        <button disabled={!liveAccount || Boolean(liveBusy)} onClick={() => void payLiveCoupon()}>
-                          pay coupon
-                        </button>
-                        <button
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() =>
-                            void executeLive("repo closed", () =>
-                              requireLiveClient().closeRepo(liveEntityId(liveForm.repoId, "Repo ID")),
-                            )
-                          }
-                        >
-                          close at 10m
-                        </button>
-                      </LiveActions>
-
-                      <LiveActions title="5 · compliant sale">
-                        <button
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void createLiveLiquidation()}
-                        >
-                          route default
-                        </button>
-                        <button
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void approveLiveSecurities("auction")}
-                        >
-                          approve sale lot
-                        </button>
-                        <button
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void createLiveVoluntaryAuction()}
-                        >
-                          voluntary list
-                        </button>
-                        <button
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() => void approveLiveUsdc("auction")}
-                        >
-                          approve bid cash
-                        </button>
-                        <button disabled={!liveKycReady || Boolean(liveBusy)} onClick={() => void bidLiveAuction()}>
-                          place bid
-                        </button>
-                        <button
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() =>
-                            void executeLive("auction closed", () =>
-                              requireLiveClient().closeAuction(liveEntityId(liveForm.auctionId, "Auction ID")),
-                            )
-                          }
-                        >
-                          close after 90s
-                        </button>
-                        <button
-                          disabled={!liveAccount || Boolean(liveBusy)}
-                          onClick={() =>
-                            void executeLive("auction settled", () =>
-                              requireLiveClient().settleAuction(liveEntityId(liveForm.auctionId, "Auction ID")),
-                            )
-                          }
-                        >
-                          settle DvP
-                        </button>
-                      </LiveActions>
-                      <small className="live-note">
-                        Switch RainbowKit accounts for borrower, lender, verifier, and bidder roles. New wallets request
-                        ATS access above; only the configured compliance wallet can approve them.
-                      </small>
-                      {liveHistory.length > 0 && (
+                      {liveHistory.length === 0 ? (
+                        <span>No transactions in this browser session yet.</span>
+                      ) : (
                         <div className="live-evidence">
                           {liveHistory.map(({ label, evidence }) => (
                             <a
@@ -1612,22 +1706,11 @@ export default function App() {
                               target="_blank"
                               rel="noreferrer"
                             >
-                              {label} ↗
+                              {label} · block {evidence.blockNumber} ↗
                             </a>
                           ))}
                         </div>
                       )}
-                    </div>
-                    <div className="timeline">
-                      {[...engine.events]
-                        .reverse()
-                        .slice(0, 6)
-                        .map((event) => (
-                          <div key={event.sequence}>
-                            <b>{event.type.replace(/_/g, " ").toLowerCase()}</b>
-                            <small>{event.detail}</small>
-                          </div>
-                        ))}
                     </div>
                   </div>
                 )}
@@ -1714,18 +1797,6 @@ function Stat({
   );
 }
 
-function Check({ label, value, ok, pending }: { label: string; value: string; ok: boolean; pending?: boolean }) {
-  return (
-    <div className="check">
-      <i className={ok ? "ok" : pending ? "pending" : "fail"}>{ok ? "★" : pending ? "·" : "×"}</i>
-      <span>
-        <small>{label}</small>
-        <b>{value}</b>
-      </span>
-    </div>
-  );
-}
-
 function LiveField({
   label,
   value,
@@ -1752,6 +1823,32 @@ function LiveActions({ title, children }: { title: string; children: ReactNode }
     <div className="live-actions">
       <b>{title}</b>
       <div>{children}</div>
+    </div>
+  );
+}
+
+function LiveLane({
+  title,
+  account,
+  readout,
+  children,
+}: {
+  title: string;
+  account?: string;
+  readout: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="live-console">
+      <div className="live-console-head">
+        <div>
+          <small>live · hedera testnet</small>
+          <b>{title}</b>
+        </div>
+        <span className={account ? "ready" : "sleeping"}>{account ? "linked" : "offline"}</span>
+      </div>
+      <p>{readout}</p>
+      {children}
     </div>
   );
 }

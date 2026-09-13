@@ -743,6 +743,18 @@ a {
   font-size: 28px;
 }
 
+.practice-score {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.practice-score .grade-pill {
+  margin: 0;
+}
+
 .score-row {
   margin-top: 8px;
 }
@@ -993,6 +1005,22 @@ a {
   gap: 6px;
 }
 
+.live-bond-values.two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.live-basket.compact {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.live-basket.compact .live-bond-head {
+  align-items: end;
+}
+
+.live-basket.compact label {
+  width: 110px;
+}
+
 .live-actions {
   margin-top: 12px;
 }
@@ -1047,6 +1075,57 @@ a {
   color: var(--lcd-ink);
   font-family: "Silkscreen", monospace;
   font-size: 9px;
+}
+
+.contract-box,
+.evidence-book {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 3px solid var(--lcd-ink);
+  border-radius: 16px;
+  background: rgb(238 242 218 / 55%);
+}
+
+.contract-box > b,
+.evidence-book > div b {
+  font-family: "Silkscreen", monospace;
+  font-size: 10px;
+}
+
+.contract-box > a {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 8px;
+  border: 2px solid var(--lcd-ink);
+  border-radius: 10px;
+  color: var(--lcd-ink);
+  text-decoration: none;
+}
+
+.contract-box > a b {
+  font-size: 11px;
+}
+
+.contract-box > a small {
+  grid-column: 1 / -1;
+  font-family: "Silkscreen", monospace;
+  font-size: 8px;
+  color: var(--lcd-dim);
+}
+
+.contract-note,
+.evidence-book > span,
+.evidence-book > div small {
+  color: var(--lcd-dim);
+  font-family: "Silkscreen", monospace;
+  font-size: 9px;
+}
+
+.evidence-book .live-evidence {
+  margin-top: 0;
 }
 
 .timeline {

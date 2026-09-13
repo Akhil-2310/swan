@@ -69,13 +69,16 @@ Keep the live scenario small enough for faucet balances: the Book defaults use a
 
 ## 4. Execute the evidence path
 
-1. Publish fresh signed prices for all four bonds, approve each bond quantity, then request the 2.5-USDC multi-series repo and retain the transaction hash.
+The live journey now follows the product navigation: use **Book** for ATS access and audit evidence, **Bonds** for collateral entry, **Pond** for funding, **Care** for margin/coupon/close, and **Sale** for voluntary or liquidation auctions. The practice game remains above each live lane, while every button inside a `live · Hedera testnet` panel writes to or reads from the deployed contracts.
+
+1. In Bonds, load and approve each bond quantity, publish fresh signed prices, then request the 2.5-USDC multi-series repo and retain the generated Repo ID.
 2. Submit one rejected ineligible offer and two eligible funded rates.
 3. Advance past the funding deadline and open the repo.
 4. Relay fresh repo-specific signed prices that create a margin call.
-5. Demonstrate a cure, then repeat with a second deal that defaults.
-6. Refresh the security price, approve ComplianceAuction for each bid, then create and settle its liquidation auctions above one allocated lender claim to prove borrower surplus.
-7. Query `/api/v1/contracts/results/{ethereumTransactionHash}` for every write and replace local `PQ-xxxx` IDs with Mirror Node consensus evidence.
+5. Switch to the borrower, approve RepoLifecycle for repayment cash, and demonstrate a partial-repayment cure. Reapprove before closing because each `transferFrom` consumes allowance.
+6. Repeat with a second deal that defaults.
+7. In Sale, Wallet A refreshes all security prices at their liquidation values. Within three minutes, Wallet B routes the default into ComplianceAuction. An eligible bidder approves bid cash, bids, then closes and settles after 90 seconds.
+8. Query `/api/v1/contracts/results/{ethereumTransactionHash}` for every write and replace local `PQ-xxxx` IDs with Mirror Node consensus evidence.
 
 Automated testnet proofs are available after supplying the required balances:
 

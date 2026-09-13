@@ -45,6 +45,8 @@ Installed browser wallets work immediately through RainbowKit. To enable WalletC
 
 ## Demo path
 
+For the live Hedera path, start in **Book** for KYC, then move through **Bonds → Pond → Care → Sale**. Book remains the compliance and audit record; the score now lives in Nest.
+
 1. Build the basket manually for the best score, or use the assisted optimizer with a 60-point penalty, then open funding.
 2. Submit the Unverified Desk offer to demonstrate the lender KYC rejection.
 3. Submit Atlas at 4.75% and Meridian at 4.10%, then close the funding race. Meridian wins.
